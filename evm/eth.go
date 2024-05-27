@@ -1,6 +1,7 @@
 package evm
 
 import (
+	"github.com/BurntSushi/toml"
 	"itachi/evm/config"
 	"math"
 	"math/big"
@@ -33,6 +34,8 @@ type Solidity struct {
 }
 
 func NewEnv(cfg *Config) *vm.EVM {
+	setDefaults(cfg)
+
 	txContext := vm.TxContext{
 		Origin:     cfg.Origin,
 		GasPrice:   cfg.GasPrice,
@@ -78,6 +81,10 @@ type Config struct {
 
 	State     *state.StateDB
 	GetHashFn func(n uint64) common.Hash
+
+	EnableEthRPC bool   `toml:"enable_eth_rpc"`
+	EthHost      string `toml:"eth_host"`
+	EthPort      string `toml:"eth_port"`
 }
 
 // sets defaults on the config
@@ -129,6 +136,15 @@ func setDefaults(cfg *Config) {
 	}
 }
 
+func LoadEvmConfig(fpath string) *Config {
+	cfg := new(Config)
+	_, err := toml.DecodeFile(fpath, cfg)
+	if err != nil {
+		logrus.Fatalf("load config file failed: %v", err)
+	}
+	return cfg
+}
+
 func (s *Solidity) InitChain(cfg *config.Config, genesisBlock *types.Block) {
 
 	DefaultGoerliGenesisBlock()
@@ -170,11 +186,11 @@ func NewSolidity(env_cfg *Config) *Solidity {
 	solidity.SetWritings(solidity.ExecuteTxn, solidity.Create)
 	solidity.SetReadings(
 		solidity.Call,
-	// solidity.GetClass, solidity.GetClassAt,
-	// 	solidity.GetClassHashAt, solidity.GetNonce, solidity.GetStorage,
-	// 	solidity.GetTransaction, solidity.GetTransactionStatus, solidity.GetReceipt,
-	// 	solidity.SimulateTransactions,
-	// 	solidity.GetBlockWithTxs, solidity.GetBlockWithTxHashes,
+		// solidity.GetClass, solidity.GetClassAt,
+		// 	solidity.GetClassHashAt, solidity.GetNonce, solidity.GetStorage,
+		// 	solidity.GetTransaction, solidity.GetTransactionStatus, solidity.GetReceipt,
+		// 	solidity.SimulateTransactions,
+		// 	solidity.GetBlockWithTxs, solidity.GetBlockWithTxHashes,
 	)
 
 	return solidity
