@@ -14,6 +14,5 @@ func main() {
 	cairoCfg := config.LoadCairoCfg("./conf/cairo_cfg.toml")
 	ethCfg := evm.LoadEvmConfig("./conf/evm_cfg.toml")
 
-	app.StartUpChain(poaCfg, cairoCfg)
-	app.StartUpEvmChain(poaCfg, ethCfg)
+	app.StartUpChain(poaCfg, cairoCfg, ethCfg)
 }

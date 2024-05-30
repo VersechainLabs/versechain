@@ -24,18 +24,17 @@ import (
 
 	"github.com/NethermindEth/juno/jsonrpc"
 	"github.com/holiman/uint256"
+	"time"
 )
 
 type Solidity struct {
 	*tripod.Tripod
-	ethState *EthState
-	cfg      *Config
-	evm      *vm.EVM
+	ethState    *EthState
+	cfg         *GethConfig
+	stateConfig *config.Config
 }
 
-func NewEnv(cfg *Config) *vm.EVM {
-	setDefaults(cfg)
-
+func newEVM(cfg *GethConfig) *vm.EVM {
 	txContext := vm.TxContext{
 		Origin:     cfg.Origin,
 		GasPrice:   cfg.GasPrice,
@@ -56,12 +55,10 @@ func NewEnv(cfg *Config) *vm.EVM {
 		Random:      cfg.Random,
 	}
 
-	// NewStateDB(parentStateRoot common.Hash);
-
 	return vm.NewEVM(blockContext, txContext, cfg.State, cfg.ChainConfig, cfg.EVMConfig)
 }
 
-type Config struct {
+type GethConfig struct {
 	ChainConfig *params.ChainConfig
 	Difficulty  *big.Int
 	Origin      common.Address
@@ -88,7 +85,7 @@ type Config struct {
 }
 
 // sets defaults on the config
-func setDefaults(cfg *Config) {
+func (s *Solidity) setDefaults(cfg *GethConfig) {
 	if cfg.ChainConfig == nil {
 		cfg.ChainConfig = &params.ChainConfig{
 			ChainID:             big.NewInt(1),
@@ -134,10 +131,39 @@ func setDefaults(cfg *Config) {
 	if cfg.BlobBaseFee == nil {
 		cfg.BlobBaseFee = big.NewInt(params.BlobTxMinBlobGasprice)
 	}
+	if cfg.State == nil {
+		cfg.State = s.ethState.StateDB
+	}
 }
 
-func LoadEvmConfig(fpath string) *Config {
-	cfg := new(Config)
+func setDefaultEthStateConfig() *config.Config {
+	return &config.Config{
+		VMTrace:                 "",
+		VMTraceConfig:           "",
+		EnablePreimageRecording: false,
+		Recovery:                false,
+		NoBuild:                 false,
+		SnapshotWait:            false,
+		SnapshotCache:           128,              // Default cache size
+		TrieCleanCache:          256,              // Default Trie cleanup cache size
+		TrieDirtyCache:          256,              // Default Trie dirty cache size
+		TrieTimeout:             60 * time.Second, // Default Trie timeout
+		Preimages:               false,
+		NoPruning:               false,
+		NoPrefetch:              false,
+		StateHistory:            0,                   // By default, there is no state history
+		StateScheme:             "full",              // Default state scheme
+		DbPath:                  "verse_db",          // Default database path
+		DbType:                  "pebble",            // Default database type
+		NameSpace:               "eth/db/chaindata/", // Default namespace
+		Ancient:                 "ancient",           // Default ancient data path
+		Cache:                   512,                 // Default cache size
+		Handles:                 64,                  // Default number of handles
+	}
+}
+
+func LoadEvmConfig(fpath string) *GethConfig {
+	cfg := new(GethConfig)
 	_, err := toml.DecodeFile(fpath, cfg)
 	if err != nil {
 		logrus.Fatalf("load config file failed: %v", err)
@@ -145,41 +171,43 @@ func LoadEvmConfig(fpath string) *Config {
 	return cfg
 }
 
-func (s *Solidity) InitChain(cfg *config.Config, genesisBlock *types.Block) {
+func (s *Solidity) InitChain(genesisBlock *yu_types.Block) {
+	cfg := s.stateConfig
+	genesis := DefaultGoerliGenesisBlock()
 
-	DefaultGoerliGenesisBlock()
+	logrus.Println("Genesis GethConfig: ", genesis.Config)
+	logrus.Println("Genesis Timestamp: ", genesis.Timestamp)
+	logrus.Println("Genesis ExtraData: ", genesis.ExtraData)
+	logrus.Println("Genesis GasLimit: ", genesis.GasLimit)
+	logrus.Println("Genesis Difficulty: ", genesis.Difficulty.String())
 
+	// init ethState
 	block, err := s.GetCurrentBlock()
 	if err != nil {
 		logrus.Fatal("GetCurrentBlock failed: ", err)
 	}
-	state, err := NewEthState(cfg, common.Hash(block.StateRoot))
+	ethState, err := NewEthState(cfg, common.Hash(block.StateRoot))
 	if err != nil {
 		logrus.Fatal("init NewEthState failed: ", err)
 	}
+	s.ethState = ethState
 
-	blockNumber := uint64(block.Height)
-
-	s.ethState = state
-	state.GenesisStateDB()
-
-	statedb, err := s.ethState.NewStateDB(common.Hash(block.StateRoot))
+	// commit genesis state
+	genesisStateRoot, err := s.ethState.GenesisCommit()
 	if err != nil {
-		logrus.Errorf("NewStateDB failed on Block(%d), error: %v", blockNumber, err)
+		logrus.Fatal("genesis state commit failed: ", err)
 	}
 
-	s.ethState.Commit(blockNumber, statedb)
-
+	genesisBlock.StateRoot = yu_common.Hash(genesisStateRoot)
 }
 
-func NewSolidity(env_cfg *Config) *Solidity {
-
-	evm := NewEnv(env_cfg)
+func NewSolidity(gethConfig *GethConfig) *Solidity {
+	ethStateConfig := setDefaultEthStateConfig()
 
 	solidity := &Solidity{
-		Tripod: tripod.NewTripod(),
-		cfg:    env_cfg,
-		evm:    evm,
+		Tripod:      tripod.NewTripod(),
+		cfg:         gethConfig,
+		stateConfig: ethStateConfig,
 		// network:       utils.Network(cfg.Network),
 	}
 
@@ -196,7 +224,7 @@ func NewSolidity(env_cfg *Config) *Solidity {
 	return solidity
 }
 
-// Execute executes the code using the input as call data during the execution.
+// ExecuteTxn executes the code using the input as call data during the execution.
 // It returns the EVM's return value, the new state and an error if it failed.
 //
 // Execute sets up an in-memory, temporary, environment for the execution of
@@ -212,14 +240,11 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 	input := txReq.Input
 
 	cfg := s.cfg
-	setDefaults(cfg)
+	s.setDefaults(cfg)
 
-	if cfg.State == nil {
-		cfg.State, _ = state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
-	}
 	var (
 		address = common.BytesToAddress([]byte("contract"))
-		vmenv   = NewEnv(cfg)
+		vmenv   = newEVM(cfg)
 		sender  = vm.AccountRef(cfg.Origin)
 		rules   = cfg.ChainConfig.Rules(vmenv.Context.BlockNumber, vmenv.Context.Random != nil, vmenv.Context.Time)
 	)
@@ -257,12 +282,12 @@ func (s *Solidity) Call(ctx *context.ReadContext) {
 	}
 
 	cfg := s.cfg
-	setDefaults(cfg)
+	s.setDefaults(cfg)
 	address := callReq.Address
 	input := callReq.Input
 
 	var (
-		vmenv   = NewEnv(cfg)
+		vmenv   = newEVM(cfg)
 		sender  = vm.AccountRef(cfg.Origin)
 		statedb = cfg.State
 		rules   = cfg.ChainConfig.Rules(vmenv.Context.BlockNumber, vmenv.Context.Random != nil, vmenv.Context.Time)
@@ -303,7 +328,7 @@ func (s *Solidity) Create(ctx *context.WriteContext) error {
 	}
 
 	cfg := s.cfg
-	setDefaults(cfg)
+	s.setDefaults(cfg)
 
 	input := txCreate.Input
 
@@ -311,7 +336,7 @@ func (s *Solidity) Create(ctx *context.WriteContext) error {
 		cfg.State, _ = state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 	}
 	var (
-		vmenv  = NewEnv(cfg)
+		vmenv  = newEVM(cfg)
 		sender = vm.AccountRef(cfg.Origin)
 		rules  = cfg.ChainConfig.Rules(vmenv.Context.BlockNumber, vmenv.Context.Random != nil, vmenv.Context.Time)
 	)
@@ -339,11 +364,7 @@ func (s *Solidity) Create(ctx *context.WriteContext) error {
 
 func (s *Solidity) Commit(block *yu_types.Block) {
 	blockNumber := uint64(block.Height)
-	statedb, err := s.ethState.NewStateDB(common.Hash(block.StateRoot))
-	if err != nil {
-		logrus.Errorf("NewStateDB failed on Block(%d), error: %v", blockNumber, err)
-	}
-	stateRoot, err := s.ethState.Commit(blockNumber, statedb)
+	stateRoot, err := s.ethState.Commit(blockNumber, common.Hash(block.StateRoot))
 	if err != nil {
 		logrus.Errorf("Solidity commit failed on Block(%d), error: %v", blockNumber, err)
 	}
