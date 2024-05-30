@@ -149,7 +149,6 @@ func (s *EthRPC) SendRawTransaction(ctx context.Context, signedTx string) (*comm
 		},
 	}
 
-	// how to get tx hash ?
 	err = s.chain.HandleTxn(signedWrCall)
 	if err != nil {
 		return nil, err

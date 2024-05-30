@@ -18,12 +18,12 @@ const SolidityTripod = "solidity"
 
 type EthRPC struct {
 	chain     *kernel.Kernel
-	cfg       *evm.Config
+	cfg       *evm.GethConfig
 	srv       *http.Server
 	rpcServer *rpc.Server
 }
 
-func StartupEthRPC(chain *kernel.Kernel, cfg *evm.Config) {
+func StartupEthRPC(chain *kernel.Kernel, cfg *evm.GethConfig) {
 	if cfg.EnableEthRPC {
 		rpcSrv, err := NewEthRPC(chain, cfg)
 		if err != nil {
@@ -40,7 +40,7 @@ func StartupEthRPC(chain *kernel.Kernel, cfg *evm.Config) {
 	}
 }
 
-func NewEthRPC(chain *kernel.Kernel, cfg *evm.Config) (*EthRPC, error) {
+func NewEthRPC(chain *kernel.Kernel, cfg *evm.GethConfig) (*EthRPC, error) {
 	s := &EthRPC{
 		chain:     chain,
 		cfg:       cfg,

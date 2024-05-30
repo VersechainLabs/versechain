@@ -131,7 +131,7 @@ func (s *Solidity) setDefaults(cfg *GethConfig) {
 	if cfg.BlobBaseFee == nil {
 		cfg.BlobBaseFee = big.NewInt(params.BlobTxMinBlobGasprice)
 	}
-	if cfg.State == nil {
+	if cfg.State == nil && s.ethState != nil {
 		cfg.State = s.ethState.StateDB
 	}
 }
@@ -220,6 +220,8 @@ func NewSolidity(gethConfig *GethConfig) *Solidity {
 		// 	solidity.SimulateTransactions,
 		// 	solidity.GetBlockWithTxs, solidity.GetBlockWithTxHashes,
 	)
+
+	solidity.setDefaults(gethConfig)
 
 	return solidity
 }
