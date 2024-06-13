@@ -3,6 +3,8 @@ package ethrpc
 import (
 	"context"
 	"encoding/json"
+	"github.com/NethermindEth/juno/core/felt"
+	"github.com/NethermindEth/juno/jsonrpc"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -37,9 +39,13 @@ type CallMsg struct {
 //	   "id": 0,
 //	   "method":"eth_chainId"
 //	}'
-func (s *EthRPC) ChainId(ctx context.Context) (*big.Int, error) {
+func (s *EthRPC) ChainId(ctx context.Context) (*felt.Felt, error) {
 	log.Printf("GetChainID")
-	return s.cfg.ChainConfig.ChainID, nil
+	//return s.cfg.ChainConfig.ChainID, nil
+	return s.network.ChainID(), nil
+}
+func (s *EthRPC) SpecVersion() (string, *jsonrpc.Error) {
+	return "0.6.0", nil
 }
 
 // Sample Request

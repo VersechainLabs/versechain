@@ -9,6 +9,7 @@ import (
 	"github.com/sourcegraph/conc"
 	"github.com/yu-org/yu/core/kernel"
 	"itachi/evm"
+	"itachi/evm/utils"
 	"net"
 	"net/http"
 	"time"
@@ -21,6 +22,7 @@ type EthRPC struct {
 	cfg       *evm.GethConfig
 	srv       *http.Server
 	rpcServer *rpc.Server
+	network   utils.Network
 }
 
 func StartupEthRPC(chain *kernel.Kernel, cfg *evm.GethConfig) {
