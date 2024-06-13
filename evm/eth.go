@@ -139,7 +139,7 @@ func SetDefaultGethConfig() *GethConfig {
 }
 
 func LoadEvmConfig(fpath string) *GethConfig {
-	cfg := defaultGethConfig()
+	cfg := SetDefaultGethConfig()
 	_, err := toml.DecodeFile(fpath, cfg)
 	if err != nil {
 		logrus.Fatalf("load config file failed: %v", err)
@@ -250,6 +250,7 @@ func NewSolidity(gethConfig *GethConfig) *Solidity {
 		// 	solidity.SimulateTransactions,
 		// 	solidity.GetBlockWithTxs, solidity.GetBlockWithTxHashes,
 	)
+
 	return solidity
 }
 
@@ -265,37 +266,45 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 		return err
 	}
 
-	code := txReq.Code
 	input := txReq.Input
+	origin := txReq.Origin
+	gasLimit := txReq.GasLimit
+	gasPrice := txReq.GasPrice
+	value := txReq.Value
 
 	cfg := s.cfg
+
+	cfg.Origin = origin
+	cfg.GasLimit = gasLimit
+	cfg.GasPrice = gasPrice
+	cfg.Value = value
 
 	var (
 		address = common.BytesToAddress([]byte("contract"))
 		vmenv   = newEVM(cfg)
-		sender  = vm.AccountRef(cfg.Origin)
+		sender  = vm.AccountRef(origin)
 		rules   = cfg.ChainConfig.Rules(vmenv.Context.BlockNumber, vmenv.Context.Random != nil, vmenv.Context.Time)
 	)
 	if cfg.EVMConfig.Tracer != nil && cfg.EVMConfig.Tracer.OnTxStart != nil {
-		cfg.EVMConfig.Tracer.OnTxStart(vmenv.GetVMContext(), types.NewTx(&types.LegacyTx{To: &address, Data: input, Value: cfg.Value, Gas: cfg.GasLimit}), cfg.Origin)
+		cfg.EVMConfig.Tracer.OnTxStart(vmenv.GetVMContext(), types.NewTx(&types.LegacyTx{To: &address, Data: input, Value: value, Gas: gasLimit}), origin)
 	}
 	// Execute the preparatory steps for state transition which includes:
 	// - prepare accessList(post-berlin)
 	// - reset transient storage(eip 1153)
-	cfg.State.Prepare(rules, cfg.Origin, cfg.Coinbase, &address, vm.ActivePrecompiles(rules), nil)
-	cfg.State.CreateAccount(address)
-	// set the receiver's (the executing contract) code for execution.
-	cfg.State.SetCode(address, code)
+	cfg.State.Prepare(rules, origin, cfg.Coinbase, &address, vm.ActivePrecompiles(rules), nil)
+	// Increment the nonce for the next transaction
+	cfg.State.SetNonce(origin, cfg.State.GetNonce(sender.Address())+1)
 	// Call the code with the given configuration.
-	ret, _, err := vmenv.Call(
+	ret, leftOverGas, err := vmenv.Call(
 		sender,
 		common.BytesToAddress([]byte("contract")),
 		input,
-		cfg.GasLimit,
-		uint256.MustFromBig(cfg.Value),
+		gasLimit,
+		uint256.MustFromBig(value),
 	)
 
 	println("Return ret value:", ret)
+	println("Return leftOverGas value:", leftOverGas)
 	return err
 }
 
@@ -312,28 +321,37 @@ func (s *Solidity) Call(ctx *context.ReadContext) {
 	cfg := s.cfg
 	address := callReq.Address
 	input := callReq.Input
+	origin := callReq.Origin
+	gasLimit := callReq.GasLimit
+	gasPrice := callReq.GasPrice
+	value := callReq.Value
+
+	cfg.Origin = origin
+	cfg.GasLimit = gasLimit
+	cfg.GasPrice = gasPrice
+	cfg.Value = value
 
 	var (
 		vmenv   = newEVM(cfg)
-		sender  = vm.AccountRef(cfg.Origin)
+		sender  = vm.AccountRef(origin)
 		statedb = cfg.State
 		rules   = cfg.ChainConfig.Rules(vmenv.Context.BlockNumber, vmenv.Context.Random != nil, vmenv.Context.Time)
 	)
 	if cfg.EVMConfig.Tracer != nil && cfg.EVMConfig.Tracer.OnTxStart != nil {
-		cfg.EVMConfig.Tracer.OnTxStart(vmenv.GetVMContext(), types.NewTx(&types.LegacyTx{To: &address, Data: input, Value: cfg.Value, Gas: cfg.GasLimit}), cfg.Origin)
+		cfg.EVMConfig.Tracer.OnTxStart(vmenv.GetVMContext(), types.NewTx(&types.LegacyTx{To: &address, Data: input, Value: value, Gas: gasLimit}), origin)
 	}
 	// Execute the preparatory steps for state transition which includes:
 	// - prepare accessList(post-berlin)
 	// - reset transient storage(eip 1153)
-	statedb.Prepare(rules, cfg.Origin, cfg.Coinbase, &address, vm.ActivePrecompiles(rules), nil)
+	statedb.Prepare(rules, origin, cfg.Coinbase, &address, vm.ActivePrecompiles(rules), nil)
 
 	// Call the code with the given configuration.
 	ret, leftOverGas, err := vmenv.Call(
 		sender,
 		address,
 		input,
-		cfg.GasLimit,
-		uint256.MustFromBig(cfg.Value),
+		gasLimit,
+		uint256.MustFromBig(value),
 	)
 	println("Return ret value:", ret)
 	println("Return leftOverGas value:", leftOverGas)
@@ -357,28 +375,37 @@ func (s *Solidity) Create(ctx *context.WriteContext) error {
 	cfg := s.cfg
 
 	input := txCreate.Input
+	origin := txCreate.Origin
+	gasLimit := txCreate.GasLimit
+	gasPrice := txCreate.GasPrice
+	value := txCreate.Value
+
+	cfg.Origin = origin
+	cfg.GasLimit = gasLimit
+	cfg.GasPrice = gasPrice
+	cfg.Value = value
 
 	if cfg.State == nil {
 		cfg.State, _ = state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 	}
 	var (
 		vmenv  = newEVM(cfg)
-		sender = vm.AccountRef(cfg.Origin)
+		sender = vm.AccountRef(origin)
 		rules  = cfg.ChainConfig.Rules(vmenv.Context.BlockNumber, vmenv.Context.Random != nil, vmenv.Context.Time)
 	)
 	if cfg.EVMConfig.Tracer != nil && cfg.EVMConfig.Tracer.OnTxStart != nil {
-		cfg.EVMConfig.Tracer.OnTxStart(vmenv.GetVMContext(), types.NewTx(&types.LegacyTx{Data: input, Value: cfg.Value, Gas: cfg.GasLimit}), cfg.Origin)
+		cfg.EVMConfig.Tracer.OnTxStart(vmenv.GetVMContext(), types.NewTx(&types.LegacyTx{Data: input, Value: value, Gas: gasLimit}), origin)
 	}
 	// Execute the preparatory steps for state transition which includes:
 	// - prepare accessList(post-berlin)
 	// - reset transient storage(eip 1153)
-	cfg.State.Prepare(rules, cfg.Origin, cfg.Coinbase, nil, vm.ActivePrecompiles(rules), nil)
+	cfg.State.Prepare(rules, origin, cfg.Coinbase, nil, vm.ActivePrecompiles(rules), nil)
 	// Call the code with the given configuration.
 	code, address, leftOverGas, err := vmenv.Create(
 		sender,
 		input,
-		cfg.GasLimit,
-		uint256.MustFromBig(cfg.Value),
+		gasLimit,
+		uint256.MustFromBig(value),
 	)
 
 	println("Return code value:", code)
@@ -393,6 +420,7 @@ func (s *Solidity) Commit(block *yu_types.Block) {
 	stateRoot, err := s.ethState.Commit(blockNumber)
 	if err != nil {
 		logrus.Errorf("Solidity commit failed on Block(%d), error: %v", blockNumber, err)
+		return
 	}
 	block.StateRoot = AdaptHash(stateRoot)
 }
