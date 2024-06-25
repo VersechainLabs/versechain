@@ -208,7 +208,7 @@ func (s *Solidity) InitChain(genesisBlock *yu_types.Block) {
 	logrus.Println("Genesis GasLimit: ", genesis.GasLimit)
 	logrus.Println("Genesis Difficulty: ", genesis.Difficulty.String())
 
-	ethState, err := NewEthState(cfg, common.Hash{})
+	ethState, err := NewEthState(cfg, common.Hash(genesisBlock.StateRoot))
 	if err != nil {
 		logrus.Fatal("init NewEthState failed: ", err)
 	}
@@ -349,7 +349,6 @@ func (s *Solidity) Call(ctx *context.ReadContext) {
 	println("Call Request input:", hex.EncodeToString(input))
 	println("Call Request gasLimit:", gasLimit)
 	println("Call Request value :", value.String())
-	
 
 	// Call the code with the given configuration.
 	ret, leftOverGas, err := vmenv.Call(
