@@ -74,7 +74,7 @@ func NewEthState(cfg *config.Config, currentStateRoot common.Hash) (*EthState, e
 	if err != nil {
 		return nil, err
 	}
-	stateDB, _ := state.New(currentStateRoot, state.NewDatabaseWithNodeDB(db, trieDB), snaps)
+	stateDB, _ := state.New(types.EmptyRootHash, state.NewDatabaseWithNodeDB(db, trieDB), snaps)
 
 	ethState := &EthState{
 		cfg:        cfg,
