@@ -3,7 +3,9 @@ package evm
 import (
 	// "github.com/yu-org/yu/common/yerror"
 
+	"encoding/hex"
 	"github.com/BurntSushi/toml"
+	"github.com/yu-org/yu/common/yerror"
 	"itachi/evm/config"
 	"math"
 	"math/big"
@@ -207,7 +209,16 @@ func (s *Solidity) InitChain(genesisBlock *yu_types.Block) {
 	logrus.Println("Genesis GasLimit: ", genesis.GasLimit)
 	logrus.Println("Genesis Difficulty: ", genesis.Difficulty.String())
 
-	ethState, err := NewEthState(cfg, common.Hash{})
+	var lastStateRoot common.Hash
+	block, err := s.GetCurrentBlock()
+	if err != nil && err != yerror.ErrBlockNotFound {
+		logrus.Fatal("get current block failed: ", err)
+	}
+	if block != nil {
+		lastStateRoot = common.Hash(block.StateRoot)
+	}
+
+	ethState, err := NewEthState(cfg, lastStateRoot)
 	if err != nil {
 		logrus.Fatal("init NewEthState failed: ", err)
 	}
@@ -327,10 +338,10 @@ func (s *Solidity) Call(ctx *context.ReadContext) {
 	cfg.Value = value
 
 	var (
-		vmenv   = newEVM(cfg)
-		sender  = vm.AccountRef(origin)
-		statedb = s.ethState
-		rules   = cfg.ChainConfig.Rules(vmenv.Context.BlockNumber, vmenv.Context.Random != nil, vmenv.Context.Time)
+		vmenv    = newEVM(cfg)
+		sender   = vm.AccountRef(origin)
+		ethState = s.ethState
+		rules    = cfg.ChainConfig.Rules(vmenv.Context.BlockNumber, vmenv.Context.Random != nil, vmenv.Context.Time)
 	)
 
 	vmenv.StateDB = s.ethState.stateDB
@@ -341,7 +352,13 @@ func (s *Solidity) Call(ctx *context.ReadContext) {
 	// Execute the preparatory steps for state transition which includes:
 	// - prepare accessList(post-berlin)
 	// - reset transient storage(eip 1153)
-	statedb.Prepare(rules, origin, cfg.Coinbase, &address, vm.ActivePrecompiles(rules), nil)
+	ethState.Prepare(rules, origin, cfg.Coinbase, &address, vm.ActivePrecompiles(rules), nil)
+
+	println("Call Request sender:", sender.Address().Hex())
+	println("Call Request address:", address.Hex())
+	println("Call Request input:", hex.EncodeToString(input))
+	println("Call Request gasLimit:", gasLimit)
+	println("Call Request value :", value.String())
 
 	// Call the code with the given configuration.
 	ret, leftOverGas, err := vmenv.Call(
@@ -352,6 +369,9 @@ func (s *Solidity) Call(ctx *context.ReadContext) {
 		uint256.MustFromBig(value),
 	)
 	println("Call Return ret value:", ret)
+	println("Call Return ret value:", hex.EncodeToString(ret))
+	retBigInt := new(big.Int).SetBytes(ret)
+	println("Call Return ret value:", retBigInt.String())
 	println("Call Return leftOverGas value:", leftOverGas)
 
 	if err != nil {
@@ -391,8 +411,10 @@ func executeContractCreation(txReq *TxRequest, ethState *EthState, cfg *GethConf
 	}
 
 	println("Return code value:", code)
+	println("Return code value:", hex.EncodeToString(code))
 	println("Return address value:", address.Hex())
 	println("Return leftOverGas value:", leftOverGas)
+	println("Contract deployment successful!")
 
 	return nil
 }
