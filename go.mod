@@ -9,6 +9,7 @@ require (
 	github.com/NethermindEth/juno v0.8.1-0.20231228072404-6222563f6218
 	github.com/NethermindEth/starknet.go v0.7.0
 	github.com/common-nighthawk/go-figure v0.0.0-20210622060536-734e95fb86be
+	github.com/davecgh/go-spew v1.1.1
 	github.com/ethereum/go-ethereum v1.14.0
 	github.com/holiman/uint256 v1.2.4
 	github.com/jinzhu/copier v0.3.5
@@ -16,6 +17,8 @@ require (
 	github.com/sirupsen/logrus v1.9.0
 	github.com/sourcegraph/conc v0.2.0
 	github.com/stretchr/testify v1.8.4
+	github.com/tendermint/tendermint v0.34.24
+	github.com/tyler-smith/go-bip39 v1.1.0
 	github.com/yu-org/yu v0.0.0-20240508071445-65e90bf5b444
 )
 
@@ -51,7 +54,6 @@ require (
 	github.com/cosmos/go-bip39 v0.0.0-20180819234021-555e2067c45d // indirect
 	github.com/crate-crypto/go-ipa v0.0.0-20231025140028-3c0104f4b233 // indirect
 	github.com/crate-crypto/go-kzg-4844 v1.0.0 // indirect
-	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/davidlazar/go-crypto v0.0.0-20200604182044-b73af7476f6c // indirect
 	github.com/deckarep/golang-set/v2 v2.1.0 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.3.0 // indirect
@@ -68,6 +70,8 @@ require (
 	github.com/getsentry/sentry-go v0.27.0 // indirect
 	github.com/gin-contrib/sse v0.1.0 // indirect
 	github.com/gin-gonic/gin v1.9.1 // indirect
+	github.com/go-kit/log v0.2.1 // indirect
+	github.com/go-logfmt/logfmt v0.5.1 // indirect
 	github.com/go-logr/logr v1.3.0 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
@@ -188,12 +192,10 @@ require (
 	github.com/status-im/keycard-go v0.2.0 // indirect
 	github.com/supranational/blst v0.3.11 // indirect
 	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7 // indirect
-	github.com/tendermint/tendermint v0.34.24 // indirect
 	github.com/test-go/testify v1.1.4 // indirect
 	github.com/tklauser/go-sysconf v0.3.12 // indirect
 	github.com/tklauser/numcpus v0.6.1 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
-	github.com/tyler-smith/go-bip39 v1.1.0 // indirect
 	github.com/ugorji/go/codec v1.2.11 // indirect
 	github.com/whyrusleeping/go-keyspace v0.0.0-20160322163242-5b898ac5add1 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
