@@ -89,6 +89,10 @@ func NewEthState(cfg *config.Config, currentStateRoot common.Hash) (*EthState, e
 	return ethState, err
 }
 
+func (s *EthState) StateAt(root common.Hash) (*state.StateDB, error) {
+	return state.New(root, s.stateCache, s.snaps)
+}
+
 func (s *EthState) GenesisCommit() (common.Hash, error) {
 	return s.Commit(0)
 }

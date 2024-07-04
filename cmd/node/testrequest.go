@@ -2,9 +2,12 @@ package main
 
 import (
 	"bytes"
+	"crypto/ecdsa"
+	"crypto/rand"
 	"encoding/hex"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -171,6 +174,88 @@ func testSendRawTransaction(exit bool) {
 		time.Sleep(5 * time.Second)
 		os.Exit(0)
 	}
+}
+
+func CreateRandomWallet(gethCfg *evm.GethConfig, count int64) []string {
+	time.Sleep(5 * time.Second)
+	result := make([]string, 0)
+	addressList := make([]string, 0)
+	for i := int64(0); i < count; i++ {
+		privateKey, address := generatePrivateKey()
+		result = append(result, privateKey)
+		addressList = append(addressList, address)
+
+		// A random private key. address = 0x7Bd36074b61Cfe75a53e1B9DF7678C96E6463b02
+		requestBody := GenerateTransferEthRequest(gethCfg, "32e3b56c9f2763d2332e6e4188e4755815ac96441e899de121969845e343c2ff", address, 100)
+		sendRequest(requestBody)
+		fmt.Printf("privateKey: %s, address: %s\n", privateKey, address)
+		time.Sleep(3 * time.Second)
+	}
+
+	fmt.Printf("---- privatekey and address list ----\n")
+	for i := int64(0); i < count; i++ {
+		fmt.Printf("privateKey: %s, address: %s\n", result[i], addressList[i])
+	}
+
+	return result
+}
+
+func GenerateTransferEthRequest(gethCfg *evm.GethConfig, privateKeyHex string, toAddress string, amount int64) string {
+	nonce := uint64(0)
+	to := common.HexToAddress(toAddress)
+	gasLimit := uint64(21000)
+	gasPrice := big.NewInt(0)
+	var data []byte
+
+	tx := types.NewTx(&types.LegacyTx{
+		Nonce:    nonce,
+		GasPrice: gasPrice,
+		Gas:      gasLimit,
+		To:       &to,
+		Value:    big.NewInt(amount),
+		Data:     data,
+	})
+
+	privateKey, err := crypto.HexToECDSA(privateKeyHex)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	chainID := gethCfg.ChainConfig.ChainID
+	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(chainID), privateKey)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Printf("SignedTx = %+v\n", signedTx)
+
+	rawTxBytes, err := rlp.EncodeToBytes(signedTx)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	requestBody := fmt.Sprintf(
+		`	{
+		"jsonrpc": "2.0",
+		"id": 0,
+		"method": "eth_sendRawTransaction",
+		"params": ["0x%x"] 
+	}`, rawTxBytes)
+	return requestBody
+}
+
+func generatePrivateKey() (string, string) {
+	privateKey, err := ecdsa.GenerateKey(crypto.S256(), rand.Reader)
+	if err != nil {
+		return "", ""
+	}
+	privateKeyBytes := crypto.FromECDSA(privateKey)
+
+	publicKey := privateKey.Public()
+	publicKeyECDSA, _ := publicKey.(*ecdsa.PublicKey)
+	address := crypto.PubkeyToAddress(*publicKeyECDSA).Hex()
+
+	return hexutil.Encode(privateKeyBytes)[2:], address
 }
 
 func sendRequest(dataString string) {

@@ -441,3 +441,7 @@ func executeContractCall(txReq *TxRequest, ethState *EthState, cfg *GethConfig, 
 
 	return nil
 }
+
+func (s *Solidity) StateAt(root common.Hash) (*state.StateDB, error) {
+	return s.ethState.StateAt(root)
+}
