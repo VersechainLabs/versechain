@@ -3,6 +3,7 @@ package ethrpc
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
@@ -21,6 +22,7 @@ import (
 	yucommon "github.com/yu-org/yu/common"
 	yucore "github.com/yu-org/yu/core"
 	"github.com/yu-org/yu/core/kernel"
+	yutypes "github.com/yu-org/yu/core/types"
 	"itachi/evm"
 	"math/big"
 	"time"
@@ -90,8 +92,22 @@ func (e *EthAPIBackend) SetHead(number uint64) {
 }
 
 func (e *EthAPIBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {
-	//TODO implement me
-	panic("implement me")
+	var (
+		yuBlock *yutypes.CompactBlock
+		err     error
+	)
+	switch number {
+	case rpc.PendingBlockNumber:
+		// FIXME
+		yuBlock, err = e.chain.Chain.GetEndBlock()
+	case rpc.LatestBlockNumber:
+		yuBlock, err = e.chain.Chain.GetEndBlock()
+	case rpc.FinalizedBlockNumber, rpc.SafeBlockNumber:
+		yuBlock, err = e.chain.Chain.LastFinalized()
+	default:
+		yuBlock, err = e.chain.Chain.GetBlockByHeight(yucommon.BlockNum(number))
+	}
+	return yuHeader2EthHeader(yuBlock.Header), err
 }
 
 func (e *EthAPIBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error) {
@@ -117,7 +133,7 @@ func (e *EthAPIBackend) CurrentBlock() *types.Header {
 	}
 	return &types.Header{
 		ParentHash:  common.Hash(yuBlock.PrevHash),
-		Coinbase:    common.Address{},
+		Coinbase:    common.Address{}, // FIXME
 		Root:        common.Hash(yuBlock.StateRoot),
 		TxHash:      common.Hash(yuBlock.TxnRoot),
 		ReceiptHash: common.Hash(yuBlock.ReceiptRoot),
@@ -147,13 +163,40 @@ func (e *EthAPIBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash r
 }
 
 func (e *EthAPIBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*state.StateDB, *types.Header, error) {
-	//TODO implement me
-	panic("implement me")
+	header, err := e.HeaderByNumber(ctx, number)
+	if err != nil {
+		return nil, nil, err
+	}
+	if header == nil {
+		return nil, nil, errors.New("header not found")
+	}
+	tri := e.chain.GetTripodInstance(SolidityTripod)
+	solidityTri := tri.(*evm.Solidity)
+	stateDB, err := solidityTri.StateAt(header.Root)
+	if err != nil {
+		return nil, nil, err
+	}
+	return stateDB, header, nil
 }
 
 func (e *EthAPIBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*state.StateDB, *types.Header, error) {
-	//TODO implement me
-	panic("implement me")
+	if blockNr, ok := blockNrOrHash.Number(); ok {
+		return e.StateAndHeaderByNumber(ctx, blockNr)
+	}
+	if hash, ok := blockNrOrHash.Hash(); ok {
+		yuBlock, err := e.chain.Chain.GetBlock(yucommon.Hash(hash))
+		if err != nil {
+			return nil, nil, err
+		}
+		tri := e.chain.GetTripodInstance(SolidityTripod)
+		solidityTri := tri.(*evm.Solidity)
+		stateDB, err := solidityTri.StateAt(common.Hash(yuBlock.StateRoot))
+		if err != nil {
+			return nil, nil, err
+		}
+		return stateDB, yuHeader2EthHeader(yuBlock.Header), nil
+	}
+	return nil, nil, errors.New("invalid arguments; neither block nor hash specified")
 }
 
 func (e *EthAPIBackend) Pending() (*types.Block, types.Receipts, *state.StateDB) {
@@ -330,4 +373,21 @@ func (e *EthAPIBackend) BloomStatus() (uint64, uint64) {
 func (e *EthAPIBackend) ServiceFilter(ctx context.Context, session *bloombits.MatcherSession) {
 	//TODO implement me
 	panic("implement me")
+}
+
+func yuHeader2EthHeader(yuHeader *yutypes.Header) *types.Header {
+	return &types.Header{
+		ParentHash:  common.Hash(yuHeader.PrevHash),
+		Coinbase:    common.Address{}, // FIXME
+		Root:        common.Hash(yuHeader.StateRoot),
+		TxHash:      common.Hash(yuHeader.TxnRoot),
+		ReceiptHash: common.Hash(yuHeader.ReceiptRoot),
+		Number:      new(big.Int).SetUint64(uint64(yuHeader.Height)),
+		GasLimit:    yuHeader.LeiLimit,
+		GasUsed:     yuHeader.LeiUsed,
+		Time:        yuHeader.Timestamp,
+		Extra:       yuHeader.Extra,
+		Nonce:       types.BlockNonce{},
+		BaseFee:     nil,
+	}
 }

@@ -19,7 +19,8 @@ require (
 	github.com/stretchr/testify v1.8.4
 	github.com/tendermint/tendermint v0.34.24
 	github.com/tyler-smith/go-bip39 v1.1.0
-	github.com/yu-org/yu v0.0.0-20240508071445-65e90bf5b444
+	github.com/yu-org/yu v0.0.0-20240703082155-5f5fd92598b8
+
 )
 
 require (
