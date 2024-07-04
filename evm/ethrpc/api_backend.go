@@ -92,8 +92,22 @@ func (e *EthAPIBackend) SetHead(number uint64) {
 }
 
 func (e *EthAPIBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {
-	//TODO implement me
-	panic("implement me")
+	var (
+		yuBlock *yutypes.CompactBlock
+		err     error
+	)
+	switch number {
+	case rpc.PendingBlockNumber:
+		// FIXME
+		yuBlock, err = e.chain.Chain.GetEndBlock()
+	case rpc.LatestBlockNumber:
+		yuBlock, err = e.chain.Chain.GetEndBlock()
+	case rpc.FinalizedBlockNumber, rpc.SafeBlockNumber:
+		yuBlock, err = e.chain.Chain.LastFinalized()
+	default:
+		yuBlock, err = e.chain.Chain.GetBlockByHeight(yucommon.BlockNum(number))
+	}
+	return yuHeader2EthHeader(yuBlock.Header), err
 }
 
 func (e *EthAPIBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error) {
@@ -149,17 +163,20 @@ func (e *EthAPIBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash r
 }
 
 func (e *EthAPIBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*state.StateDB, *types.Header, error) {
-	yuBlock, err := e.chain.Chain.GetBlockByHeight(yucommon.BlockNum(number))
+	header, err := e.HeaderByNumber(ctx, number)
 	if err != nil {
 		return nil, nil, err
+	}
+	if header == nil {
+		return nil, nil, errors.New("header not found")
 	}
 	tri := e.chain.GetTripodInstance(SolidityTripod)
 	solidityTri := tri.(*evm.Solidity)
-	stateDB, err := solidityTri.StateAt(common.Hash(yuBlock.StateRoot))
+	stateDB, err := solidityTri.StateAt(header.Root)
 	if err != nil {
 		return nil, nil, err
 	}
-	return stateDB, yuHeader2EthHeader(yuBlock.Header), nil
+	return stateDB, header, nil
 }
 
 func (e *EthAPIBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*state.StateDB, *types.Header, error) {
