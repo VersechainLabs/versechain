@@ -1,6 +1,7 @@
 package pkg
 
 import (
+	"log"
 	"math/rand"
 	"time"
 )
@@ -11,7 +12,7 @@ const (
 
 type CaseEthWallet struct {
 	*EthWallet
-	EthCount int64 `json:"ethCount"`
+	EthCount uint64 `json:"ethCount"`
 }
 
 func (c *CaseEthWallet) Copy() *CaseEthWallet {
@@ -21,14 +22,13 @@ func (c *CaseEthWallet) Copy() *CaseEthWallet {
 	}
 }
 
-type TransferManager struct {
-}
+type TransferManager struct{}
 
 func NewTransferManager() *TransferManager {
 	return &TransferManager{}
 }
 
-func GenerateCaseWallets(initialEthCount int64, wallets []*EthWallet) []*CaseEthWallet {
+func GenerateCaseWallets(initialEthCount uint64, wallets []*EthWallet) []*CaseEthWallet {
 	c := make([]*CaseEthWallet, 0)
 	for _, w := range wallets {
 		c = append(c, &CaseEthWallet{
@@ -54,6 +54,44 @@ func (m *TransferManager) GenerateTransferSteps(stepCount int, wallets []*CaseEt
 	return t
 }
 
+func (tc *TransferCase) Run(m *WalletManager) error {
+	for _, step := range tc.Steps {
+		if err := m.TransferEth(step.From, step.To, step.Count); err != nil {
+			return err
+		}
+	}
+	log.Println("wait transaction done")
+	time.Sleep(5 * time.Second)
+	return nil
+}
+
+func (tc *TransferCase) AssertExpect(m *WalletManager, wallets []*EthWallet) (map[string]*CaseEthWallet, bool, error) {
+	got := make(map[string]*CaseEthWallet)
+	for _, w := range wallets {
+		c, err := m.QueryEth(w)
+		if err != nil {
+			return nil, false, err
+		}
+		got[w.Address] = &CaseEthWallet{
+			EthWallet: w,
+			EthCount:  c,
+		}
+	}
+	if len(tc.Expect) != len(got) {
+		return got, false, nil
+	}
+	for key, value := range got {
+		e, ok := tc.Expect[key]
+		if !ok {
+			return got, false, nil
+		}
+		if e.EthCount != value.EthCount {
+			return got, false, nil
+		}
+	}
+	return got, true, nil
+}
+
 func calculateExpect(tc *TransferCase) {
 	for _, step := range tc.Steps {
 		calculate(step, tc.Expect)
@@ -71,15 +109,15 @@ func calculate(step *Step, expect map[string]*CaseEthWallet) {
 
 func generateStep(r *rand.Rand, wallets []*CaseEthWallet, maxTransfer int) *Step {
 	from := r.Intn(len(wallets))
-	to := r.Intn(len(wallets))
-	for from == to {
-		to = r.Intn(len(wallets))
+	to := from + 1
+	if to >= len(wallets) {
+		to = 0
 	}
 	transferCount := r.Intn(maxTransfer) + 1
 	return &Step{
 		From:  wallets[from].EthWallet,
 		To:    wallets[to].EthWallet,
-		Count: int64(transferCount),
+		Count: uint64(transferCount),
 	}
 }
 
@@ -101,5 +139,5 @@ type TransferCase struct {
 type Step struct {
 	From  *EthWallet `json:"from"`
 	To    *EthWallet `json:"to"`
-	Count int64      `json:"count"`
+	Count uint64     `json:"count"`
 }

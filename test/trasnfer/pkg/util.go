@@ -5,6 +5,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/rand"
 	"fmt"
+	"io"
 	"net/http"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -25,25 +26,25 @@ func generatePrivateKey() (string, string) {
 	return hexutil.Encode(privateKeyBytes)[2:], address
 }
 
-func sendRequest(hostAddress string, dataString string) error {
+func sendRequest(hostAddress string, dataString string) ([]byte, error) {
 	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://%s", hostAddress), bytes.NewBuffer([]byte(dataString)))
 	if err != nil {
-		return err
+		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-
-	fmt.Printf("curl --location 'localhost:9092' --header 'Content-Type: application/json' --data '%s'\n", dataString)
-
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("error sending request: %v", err)
+		return nil, fmt.Errorf("error sending request: %v", err)
 	}
-
 	defer resp.Body.Close()
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("error sending request: %v", err)
+	}
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("status code err: %v", resp.StatusCode)
+		return nil, fmt.Errorf("status code err: %v", resp.StatusCode)
 	}
-	return nil
+	return data, nil
 }

@@ -1,9 +1,12 @@
 package pkg
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"math/big"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -42,7 +45,7 @@ func NewWalletManager(cfg *evm.GethConfig, hostAddress string) *WalletManager {
 	}
 }
 
-func (m *WalletManager) GenerateRandomWallet(count int, initialEthCount int64) ([]*EthWallet, error) {
+func (m *WalletManager) GenerateRandomWallet(count int, initialEthCount uint64) ([]*EthWallet, error) {
 	wallets := make([]*EthWallet, 0)
 	for i := 0; i < count; i++ {
 		wallet, err := m.createEthWallet(initialEthCount)
@@ -54,24 +57,59 @@ func (m *WalletManager) GenerateRandomWallet(count int, initialEthCount int64) (
 	return wallets, nil
 }
 
-func (m *WalletManager) createEthWallet(initialEthCount int64) (*EthWallet, error) {
+func (m *WalletManager) createEthWallet(initialEthCount uint64) (*EthWallet, error) {
 	privateKey, address := generatePrivateKey()
-	if err := m.transferEth(GenesisPrivateKey, privateKey, initialEthCount); err != nil {
+	if err := m.transferEth(GenesisPrivateKey, address, initialEthCount); err != nil {
 		return nil, err
 	}
 	time.Sleep(3 * time.Second)
+	log.Println(fmt.Sprintf("create wallet %v", address))
 	return &EthWallet{PK: privateKey, Address: address}, nil
 }
 
-func (m *WalletManager) TransferEth(from, to *EthWallet, amount int64) error {
-	log.Println(fmt.Sprintf("transfer %v eth from %v to %v", amount, from.PK, to.Address))
+func (m *WalletManager) TransferEth(from, to *EthWallet, amount uint64) error {
+	log.Println(fmt.Sprintf("transfer %v eth from %v to %v", amount, from.Address, to.Address))
 	if err := m.transferEth(from.PK, to.Address, amount); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (m *WalletManager) transferEth(privateKeyHex string, toAddress string, amount int64) error {
+func (m *WalletManager) QueryEth(wallet *EthWallet) (uint64, error) {
+	requestBody := fmt.Sprintf(
+		`	{
+		"jsonrpc": "2.0",
+		"id": 0,
+		"method": "eth_getBalance",
+		"params": ["%s","latest"] 
+	}`, wallet.Address)
+	d, err := sendRequest(m.hostAddress, requestBody)
+	if err != nil {
+		return 0, err
+	}
+	resp := &queryResponse{}
+	if err := json.Unmarshal(d, resp); err != nil {
+		return 0, nil
+	}
+	return parse(resp.Result)
+}
+
+func parse(v string) (uint64, error) {
+	if !strings.HasPrefix(v, "0x") {
+		return 0, fmt.Errorf("%v should start with 0v", v)
+	}
+	value, err := strconv.ParseUint(v[2:], 16, 64)
+	if err != nil {
+		return 0, err
+	}
+	return value, nil
+}
+
+type queryResponse struct {
+	Result string `json:"result"`
+}
+
+func (m *WalletManager) transferEth(privateKeyHex string, toAddress string, amount uint64) error {
 	nonce := uint64(0)
 	to := common.HexToAddress(toAddress)
 	gasLimit := uint64(21000)
@@ -83,7 +121,7 @@ func (m *WalletManager) transferEth(privateKeyHex string, toAddress string, amou
 		GasPrice: gasPrice,
 		Gas:      gasLimit,
 		To:       &to,
-		Value:    big.NewInt(amount),
+		Value:    big.NewInt(int64(amount)),
 		Data:     data,
 	})
 
@@ -109,5 +147,7 @@ func (m *WalletManager) transferEth(privateKeyHex string, toAddress string, amou
 		"method": "eth_sendRawTransaction",
 		"params": ["0x%x"] 
 	}`, rawTxBytes)
-	return sendRequest(m.hostAddress, requestBody)
+	got, err := sendRequest(m.hostAddress, requestBody)
+	fmt.Println(string(got))
+	return err
 }
