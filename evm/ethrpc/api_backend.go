@@ -111,26 +111,14 @@ func (e *EthAPIBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumb
 }
 
 func (e *EthAPIBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error) {
+
 	yuBlock, err := e.chain.Chain.GetBlock(yucommon.Hash(hash))
 	if err != nil {
 		logrus.Error("ethrpc.api_backend.HeaderByHash() failed: ", err)
 		return new(types.Header), err
 	}
 
-	return &types.Header{
-		ParentHash:  common.Hash(yuBlock.PrevHash),
-		Coinbase:    common.Address{},
-		Root:        common.Hash(yuBlock.StateRoot),
-		TxHash:      common.Hash(yuBlock.TxnRoot),
-		ReceiptHash: common.Hash(yuBlock.ReceiptRoot),
-		Number:      new(big.Int).SetUint64(uint64(yuBlock.Height)),
-		GasLimit:    yuBlock.LeiLimit,
-		GasUsed:     yuBlock.LeiUsed,
-		Time:        yuBlock.Timestamp,
-		Extra:       yuBlock.Extra,
-		Nonce:       types.BlockNonce{},
-		BaseFee:     nil,
-	}, err
+	return yuHeader2EthHeader(yuBlock.Header), err
 }
 
 func (e *EthAPIBackend) HeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Header, error) {
@@ -153,43 +141,18 @@ func (e *EthAPIBackend) CurrentHeader() *types.Header {
 		logrus.Error("EthAPIBackend.CurrentBlock() failed: ", err)
 		return new(types.Header)
 	}
-	return &types.Header{
-		ParentHash:  common.Hash(yuBlock.PrevHash),
-		Coinbase:    common.Address{},
-		Root:        common.Hash(yuBlock.StateRoot),
-		TxHash:      common.Hash(yuBlock.TxnRoot),
-		ReceiptHash: common.Hash(yuBlock.ReceiptRoot),
-		Number:      new(big.Int).SetUint64(uint64(yuBlock.Height)),
-		GasLimit:    yuBlock.LeiLimit,
-		GasUsed:     yuBlock.LeiUsed,
-		Time:        yuBlock.Timestamp,
-		Extra:       yuBlock.Extra,
-		Nonce:       types.BlockNonce{},
-		BaseFee:     nil,
-	}
+	return yuHeader2EthHeader(yuBlock.Header)
 }
 
 // Question: this should return *types.Block
 func (e *EthAPIBackend) CurrentBlock() *types.Header {
+
 	yuBlock, err := e.chain.Chain.GetEndBlock()
 	if err != nil {
 		logrus.Error("EthAPIBackend.CurrentBlock() failed: ", err)
 		return new(types.Header)
 	}
-	return &types.Header{
-		ParentHash:  common.Hash(yuBlock.PrevHash),
-		Coinbase:    common.Address{}, // FIXME
-		Root:        common.Hash(yuBlock.StateRoot),
-		TxHash:      common.Hash(yuBlock.TxnRoot),
-		ReceiptHash: common.Hash(yuBlock.ReceiptRoot),
-		Number:      new(big.Int).SetUint64(uint64(yuBlock.Height)),
-		GasLimit:    yuBlock.LeiLimit,
-		GasUsed:     yuBlock.LeiUsed,
-		Time:        yuBlock.Timestamp,
-		Extra:       yuBlock.Extra,
-		Nonce:       types.BlockNonce{},
-		BaseFee:     nil,
-	}
+	return yuHeader2EthHeader(yuBlock.Header)
 }
 
 func (e *EthAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error) {
