@@ -39,6 +39,7 @@ func (e *EthAPIBackend) SyncProgress() ethereum.SyncProgress {
 	panic("implement me")
 }
 
+// This is moved to ethrpc/gasprice.go
 //func (e *EthAPIBackend) SuggestGasTipCap(ctx context.Context) (*big.Int, error) {
 //	//TODO implement me
 //	panic("implement me")

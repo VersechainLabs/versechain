@@ -64,11 +64,11 @@ func (e *EthAPIBackend) SuggestGasTipCap(ctx context.Context) (*big.Int, error) 
 
 	// Try checking the cache again, maybe the last fetch fetched what we need
 	//oracle.cacheLock.RLock()
-	lastHead, lastPrice = ethGasPrice.lastHead, ethGasPrice.lastPrice
+	//lastHead, lastPrice = ethGasPrice.lastHead, ethGasPrice.lastPrice
 	//oracle.cacheLock.RUnlock()
-	if headHash == lastHead {
-		return new(big.Int).Set(lastPrice), nil
-	}
+	//if headHash == lastHead {
+	//	return new(big.Int).Set(lastPrice), nil
+	//}
 	var (
 		sent, exp int
 		number    = head.Number.Uint64()
