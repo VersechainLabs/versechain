@@ -5,6 +5,7 @@ import (
 
 	"encoding/hex"
 	"github.com/BurntSushi/toml"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/yu-org/yu/common/yerror"
 	"itachi/evm/config"
 	"math"
@@ -444,4 +445,8 @@ func executeContractCall(txReq *TxRequest, ethState *EthState, cfg *GethConfig, 
 
 func (s *Solidity) StateAt(root common.Hash) (*state.StateDB, error) {
 	return s.ethState.StateAt(root)
+}
+
+func (s *Solidity) GetEthDB() ethdb.Database {
+	return s.ethState.ethDB
 }
