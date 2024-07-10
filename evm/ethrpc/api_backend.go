@@ -55,12 +55,6 @@ func (e *EthAPIBackend) BlobBaseFee(ctx context.Context) *big.Int {
 	panic("implement me")
 }
 
-func (e *EthAPIBackend) AccountManager() *accounts.Manager {
-	//TODO implement me
-	return nil
-	//panic("implement me")
-}
-
 func (e *EthAPIBackend) ExtRPCEnabled() bool {
 	return true
 }
@@ -107,7 +101,7 @@ func (e *EthAPIBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumb
 
 func (e *EthAPIBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error) {
 
-	yuBlock, err := e.chain.Chain.GetBlock(yucommon.Hash(hash))
+	yuBlock, err := e.chain.Chain.GetCompactBlock(yucommon.Hash(hash))
 	if err != nil {
 		logrus.Error("ethrpc.api_backend.HeaderByHash() failed: ", err)
 		return new(types.Header), err
@@ -130,7 +124,7 @@ func (e *EthAPIBackend) HeaderByNumberOrHash(ctx context.Context, blockNrOrHash 
 
 // Same as CurrentBlock()
 func (e *EthAPIBackend) CurrentHeader() *types.Header {
-	yuBlock, err := e.chain.Chain.GetEndBlock()
+	yuBlock, err := e.chain.Chain.GetEndCompactBlock()
 
 	if err != nil {
 		logrus.Error("EthAPIBackend.CurrentBlock() failed: ", err)
@@ -142,7 +136,7 @@ func (e *EthAPIBackend) CurrentHeader() *types.Header {
 
 // Question: this should return *types.Block
 func (e *EthAPIBackend) CurrentBlock() *types.Header {
-	yuBlock, err := e.chain.Chain.GetEndBlock()
+	yuBlock, err := e.chain.Chain.GetEndCompactBlock()
 
 	if err != nil {
 		logrus.Error("EthAPIBackend.CurrentBlock() failed: ", err)
@@ -218,6 +212,11 @@ func (e *EthAPIBackend) ChainDb() ethdb.Database {
 	solidityTri := tri.(*evm.Solidity)
 	ethDB := solidityTri.GetEthDB()
 	return ethDB
+}
+
+func (e *EthAPIBackend) AccountManager() *accounts.Manager {
+	//TODO implement me
+	panic("implement me")
 }
 
 func (e *EthAPIBackend) Pending() (*types.Block, types.Receipts, *state.StateDB) {
