@@ -197,9 +197,9 @@ func (c *Cairo) GetBlockWithTxs(ctx *context.ReadContext) {
 func (c *Cairo) getYuBlock(id BlockID) (*types.CompactBlock, error) {
 	switch {
 	case id.Latest || id.Pending:
-		return c.Chain.GetEndBlock()
+		return c.Chain.GetEndCompactBlock()
 	default:
-		return c.Chain.GetBlockByHeight(common.BlockNum(id.Number))
+		return c.Chain.GetCompactBlockByHeight(common.BlockNum(id.Number))
 	}
 }
 
