@@ -216,7 +216,7 @@ func (e *EthAPIBackend) ChainDb() ethdb.Database {
 
 func (e *EthAPIBackend) AccountManager() *accounts.Manager {
 	//TODO implement me
-	panic("implement me")
+	return nil
 }
 
 func (e *EthAPIBackend) Pending() (*types.Block, types.Receipts, *state.StateDB) {
@@ -235,8 +235,21 @@ func (e *EthAPIBackend) GetTd(ctx context.Context, hash common.Hash) *big.Int {
 }
 
 func (e *EthAPIBackend) GetEVM(ctx context.Context, msg *core.Message, state *state.StateDB, header *types.Header, vmConfig *vm.Config, blockCtx *vm.BlockContext) *vm.EVM {
-	//TODO implement me
-	panic("implement me")
+	if vmConfig == nil {
+		//vmConfig = e.chain.Chain.GetVMConfig()
+		vmConfig = &vm.Config{
+			EnablePreimageRecording: false, // TODO: replace with ctx.Bool()
+		}
+	}
+	txContext := core.NewEVMTxContext(msg)
+	var context vm.BlockContext
+	if blockCtx != nil {
+		context = *blockCtx
+	} else {
+		var b Backend
+		context = core.NewEVMBlockContext(header, NewChainContext(ctx, b), nil)
+	}
+	return vm.NewEVM(context, txContext, state, e.ChainConfig(), *vmConfig)
 }
 
 func (e *EthAPIBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription {
