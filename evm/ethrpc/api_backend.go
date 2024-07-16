@@ -343,6 +343,26 @@ func (e *EthAPIBackend) SendTx(ctx context.Context, signedTx *types.Transaction)
 	return e.chain.HandleTxn(signedWrCall)
 }
 
+func yuTxn2EthTxn(yuSignedTxn *yutypes.SignedTxn) *types.Transaction {
+	// Un-serialize wrCall.params to retrive datas:
+	wrCallParams := yuSignedTxn.Raw.WrCall.Params
+	var txReq = &evm.TxRequest{}
+	json.Unmarshal([]byte(wrCallParams), txReq)
+
+	// if nonce is assigned to signedTx.Raw.Nonce, then this is ok; otherwise it's nil:
+	nonce := yuSignedTxn.Raw.Nonce
+
+	tx := types.NewTx(&types.LegacyTx{
+		Nonce:    nonce,
+		GasPrice: txReq.GasPrice,
+		Gas:      txReq.GasLimit, // gasLimit: should be obtained from Block & Settings
+		To:       &txReq.Address,
+		Value:    txReq.Value,
+		Data:     txReq.Input,
+	})
+
+	return tx
+}
 func (e *EthAPIBackend) GetTransaction(ctx context.Context, txHash common.Hash) (bool, *types.Transaction, common.Hash, uint64, uint64, error) {
 	//TODO implement me
 	panic("implement me")
@@ -453,27 +473,6 @@ func yuHeader2EthHeader(yuHeader *yutypes.Header) *types.Header {
 		Nonce:       types.BlockNonce{},
 		BaseFee:     nil,
 	}
-}
-
-func yuTxn2EthTxn(yuSignedTxn *yutypes.SignedTxn) *types.Transaction {
-	// Init default values for Eth.Block.Transactions.TxData:
-	var data []byte
-
-	nonce := yuSignedTxn.Raw.Nonce
-	to := common.HexToAddress("")
-	gasLimit := yuSignedTxn.Raw.WrCall.LeiPrice // TODO - what should the limit be?
-	gasPrice := new(big.Int).SetUint64(yuSignedTxn.Raw.WrCall.LeiPrice)
-
-	tx := types.NewTx(&types.LegacyTx{
-		Nonce:    nonce,
-		GasPrice: gasPrice,
-		Gas:      gasLimit,
-		To:       &to,
-		Value:    big.NewInt(0),
-		Data:     data,
-	})
-
-	return tx
 }
 
 func compactBlock2EthBlock(yuBlock *yutypes.Block) *types.Block {
