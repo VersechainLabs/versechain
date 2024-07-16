@@ -332,11 +332,27 @@ func (e *EthAPIBackend) SendTx(ctx context.Context, signedTx *types.Transaction)
 func (e *EthAPIBackend) GetTransaction(ctx context.Context, txHash common.Hash) (bool, *types.Transaction, common.Hash, uint64, uint64, error) {
 	//TODO implement me
 	panic("implement me")
+
+	//stxn, err := e.chain.ChainEnv.Pool.GetTxn(yucommon.Hash(txHash)) // will not return error here
+	//if err != nil || stxn == nil {
+	//	return false, nil, common.Hash{}, 0, 0, err
+	//}
+	//return true, tx, lookup.BlockHash, lookup.BlockIndex, lookup.Index, nil
 }
 
 func (e *EthAPIBackend) GetPoolTransactions() (types.Transactions, error) {
-	//TODO implement me
-	panic("implement me")
+	stxn, _ := e.chain.ChainEnv.Pool.GetAllTxns() // will not return error here
+
+	// Init default values for Eth.Block.Transactions.TxData:
+	var ethTxns []*types.Transaction
+
+	// Create Eth.Block.Transactions from yu.CompactBlock.Hashes:
+	for _, yuSignedTxn := range stxn {
+		ethTxn := yuTxn2EthTxn(yuSignedTxn)
+		ethTxns = append(ethTxns, ethTxn)
+	}
+
+	return ethTxns, nil
 }
 
 func (e *EthAPIBackend) GetPoolTransaction(txHash common.Hash) *types.Transaction {
@@ -423,6 +439,27 @@ func yuHeader2EthHeader(yuHeader *yutypes.Header) *types.Header {
 		Nonce:       types.BlockNonce{},
 		BaseFee:     nil,
 	}
+}
+
+func yuTxn2EthTxn(yuSignedTxn *yutypes.SignedTxn) *types.Transaction {
+	// Init default values for Eth.Block.Transactions.TxData:
+	var data []byte
+
+	nonce := yuSignedTxn.Raw.Nonce
+	to := common.HexToAddress("")
+	gasLimit := yuSignedTxn.Raw.WrCall.LeiPrice // TODO - what should the limit be?
+	gasPrice := new(big.Int).SetUint64(yuSignedTxn.Raw.WrCall.LeiPrice)
+
+	tx := types.NewTx(&types.LegacyTx{
+		Nonce:    nonce,
+		GasPrice: gasPrice,
+		Gas:      gasLimit,
+		To:       &to,
+		Value:    big.NewInt(0),
+		Data:     data,
+	})
+
+	return tx
 }
 
 func compactBlock2EthBlock(yuBlock *yutypes.Block) *types.Block {
