@@ -17,4 +17,6 @@ COPY ./conf /conf
 RUN mkdir /cairo_db /yu /verse_db
 COPY --from=builder /build/itachi /itachi
 
+EXPOSE 8887 9091 8081 9092
+
 CMD ["/itachi"]
