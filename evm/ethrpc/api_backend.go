@@ -45,10 +45,8 @@ func (e *EthAPIBackend) SyncProgress() ethereum.SyncProgress {
 //	panic("implement me")
 //}
 
-func (e *EthAPIBackend) FeeHistory(ctx context.Context, blockCount uint64, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (*big.Int, [][]*big.Int, []*big.Int, []float64, []*big.Int, []float64, error) {
-	//TODO implement me
-	panic("implement me")
-}
+// Move to ethrpc/gasprice.go
+//func (e *EthAPIBackend) FeeHistory(ctx context.Context, blockCount uint64, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (*big.Int, [][]*big.Int, []*big.Int, []float64, []*big.Int, []float64, error) {}
 
 func (e *EthAPIBackend) BlobBaseFee(ctx context.Context) *big.Int {
 	//TODO implement me
@@ -147,8 +145,24 @@ func (e *EthAPIBackend) CurrentBlock() *types.Header {
 }
 
 func (e *EthAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error) {
-	yuBlock, err := e.chain.Chain.GetBlockByHeight(yucommon.BlockNum(number))
-
+	var (
+		yuBlock *yutypes.Block
+		err     error
+	)
+	switch number {
+	case rpc.PendingBlockNumber:
+		// FIXME
+		yuBlock, err = e.chain.Chain.GetEndBlock()
+	case rpc.LatestBlockNumber:
+		yuBlock, err = e.chain.Chain.GetEndBlock()
+	case rpc.FinalizedBlockNumber, rpc.SafeBlockNumber:
+		yuBlock, err = e.chain.Chain.LastFinalized()
+	default:
+		yuBlock, err = e.chain.Chain.GetBlockByHeight(yucommon.BlockNum(number))
+	}
+	if err != nil {
+		return nil, err
+	}
 	return compactBlock2EthBlock(yuBlock), err
 }
 
