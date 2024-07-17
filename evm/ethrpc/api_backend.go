@@ -364,7 +364,8 @@ func yuTxn2EthTxn(yuSignedTxn *yutypes.SignedTxn) *types.Transaction {
 	return tx
 }
 func (e *EthAPIBackend) GetTransaction(ctx context.Context, txHash common.Hash) (bool, *types.Transaction, common.Hash, uint64, uint64, error) {
-	stxn, err := e.chain.ChainEnv.Pool.GetTxn(yucommon.Hash(txHash)) // will not return error here
+	// Used to get txn from either txdb & txpool:
+	stxn, err := e.chain.GetTxn(yucommon.Hash(txHash))
 	if err != nil || stxn == nil {
 		return false, nil, common.Hash{}, 0, 0, err
 	}
@@ -379,7 +380,8 @@ func (e *EthAPIBackend) GetTransaction(ctx context.Context, txHash common.Hash) 
 }
 
 func (e *EthAPIBackend) GetPoolTransactions() (types.Transactions, error) {
-	stxn, _ := e.chain.ChainEnv.Pool.GetAllTxns() // will not return error here
+	// Similar to: e.chain.ChainEnv.Pool.GetTxn - ChainEnv can be ignored b/c txpool has index based on hxHash, therefore it's unique
+	stxn, _ := e.chain.Pool.GetAllTxns() // will not return error here
 
 	var ethTxns []*types.Transaction
 
@@ -393,7 +395,7 @@ func (e *EthAPIBackend) GetPoolTransactions() (types.Transactions, error) {
 
 // Similar to GetTransaction():
 func (e *EthAPIBackend) GetPoolTransaction(txHash common.Hash) *types.Transaction {
-	stxn, err := e.chain.ChainEnv.Pool.GetTxn(yucommon.Hash(txHash)) // will not return error here
+	stxn, err := e.chain.Pool.GetTxn(yucommon.Hash(txHash)) // will not return error here
 	if err != nil || stxn == nil {
 		return nil
 	}
