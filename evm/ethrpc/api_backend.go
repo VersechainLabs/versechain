@@ -401,8 +401,16 @@ func (e *EthAPIBackend) GetPoolTransaction(txHash common.Hash) *types.Transactio
 }
 
 func (e *EthAPIBackend) GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error) {
-	//TODO implement me
-	panic("implement me")
+	// Loop through all transactions to find matching Account Address, and return it's nonce (if have)
+	allEthTxns, _ := e.GetPoolTransactions()
+
+	for _, ethTxn := range allEthTxns {
+		if *ethTxn.To() == addr {
+			return ethTxn.Nonce(), nil
+		}
+	}
+
+	return 0, nil
 }
 
 func (e *EthAPIBackend) Stats() (pending int, queued int) {
