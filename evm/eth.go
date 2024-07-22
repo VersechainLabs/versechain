@@ -325,6 +325,8 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 
 	vmenv := newEVM(cfg)
 	vmenv.StateDB = s.ethState.stateDB
+	vmenv.Context.BlockNumber = big.NewInt(int64(ctx.Block.Height))
+	s.cfg.BlockNumber = big.NewInt(int64(ctx.Block.Height))
 
 	logrus.Println("ExecuteTxn vmenv: ", vmenv)
 
@@ -351,7 +353,7 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 
 		var evmReceipt types.Receipt
 		if leftOverGas > 0 {
-			evmReceipt = makeEvmReceipt(vmenv, code, ctx.Block, address, leftOverGas)
+			evmReceipt = makeEvmReceipt(code, ctx.Txn, ctx.Block, address, leftOverGas)
 			fmt.Printf("Return evmReceipt value: %+v\n", evmReceipt)
 		}
 
@@ -383,7 +385,7 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 
 		var evmReceipt types.Receipt
 		if leftOverGas > 0 {
-			evmReceipt = makeEvmReceipt(vmenv, ret, ctx.Block, txReq.Address, leftOverGas)
+			evmReceipt = makeEvmReceipt(ret, ctx.Txn, ctx.Block, txReq.Address, leftOverGas)
 			fmt.Printf("Return evmReceipt value: %+v\n", evmReceipt)
 		}
 
@@ -482,9 +484,9 @@ func AdaptHash(ethHash common.Hash) yu_common.Hash {
 	return yuHash
 }
 
-func makeEvmReceipt(vmenv *vm.EVM, code []byte, block *yu_types.Block, address common.Address, leftOverGas uint64) types.Receipt {
-	blockNumber := vmenv.Context.BlockNumber
-	txHash := common.BytesToHash(code)
+func makeEvmReceipt(code []byte, signedTx *yu_types.SignedTxn, block *yu_types.Block, address common.Address, leftOverGas uint64) types.Receipt {
+	blockNumber := big.NewInt(int64(block.Height))
+	txHash := common.BytesToHash(signedTx.TxnHash[:])
 	effectiveGasPrice := big.NewInt(1000000000) // 1 GWei
 	bloom := types.Bloom{}
 	logs := []*types.Log{}
