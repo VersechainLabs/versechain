@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/BurntSushi/toml"
 	"github.com/NethermindEth/juno/encoder"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -14,7 +15,6 @@ import (
 	"math"
 	"math/big"
 	"net/http"
-	"fmt"
 
 	"github.com/sirupsen/logrus"
 	yu_common "github.com/yu-org/yu/common"
@@ -355,7 +355,6 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 			fmt.Printf("Return evmReceipt value: %+v\n", evmReceipt)
 		}
 
-
 		receiptByt, err := encoder.Marshal(evmReceipt)
 		if err != nil {
 			return err
@@ -388,8 +387,7 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 			fmt.Printf("Return evmReceipt value: %+v\n", evmReceipt)
 		}
 
-
-		receiptByt, err := encoder.Marshal(evmReceipt)
+		receiptByt, err := json.Marshal(evmReceipt)
 		if err != nil {
 			return err
 		}
@@ -557,7 +555,7 @@ func (s *Solidity) getReceipt(hash common.Hash) (*types.Receipt, error) {
 		return nil, errors.New("no receipt found")
 	}
 	receipt := new(types.Receipt)
-	err = encoder.Unmarshal(yuReceipt.Extra, receipt)
+	err = json.Unmarshal(yuReceipt.Extra, receipt)
 	return receipt, err
 }
 
