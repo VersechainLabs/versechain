@@ -14,6 +14,7 @@ import (
 	"math"
 	"math/big"
 	"net/http"
+	"fmt"
 
 	"github.com/sirupsen/logrus"
 	yu_common "github.com/yu-org/yu/common"
@@ -331,10 +332,72 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 	rules := cfg.ChainConfig.Rules(vmenv.Context.BlockNumber, vmenv.Context.Random != nil, vmenv.Context.Time)
 
 	if txReq.Address == zeroAddress {
-		return executeContractCreation(txReq, ethstate, cfg, vmenv, sender, rules)
+		if cfg.EVMConfig.Tracer != nil && cfg.EVMConfig.Tracer.OnTxStart != nil {
+			cfg.EVMConfig.Tracer.OnTxStart(vmenv.GetVMContext(), types.NewTx(&types.LegacyTx{Data: txReq.Input, Value: txReq.Value, Gas: txReq.GasLimit}), txReq.Origin)
+		}
+
+		ethstate.Prepare(rules, cfg.Origin, cfg.Coinbase, nil, vm.ActivePrecompiles(rules), nil)
+
+		code, address, leftOverGas, err := vmenv.Create(sender, txReq.Input, txReq.GasLimit, uint256.MustFromBig(txReq.Value))
+		if err != nil {
+			return err
+		}
+
+		println("Return code value:", code)
+		println("Return code value:", hex.EncodeToString(code))
+		println("Return address value:", address.Hex())
+		println("Return leftOverGas value:", leftOverGas)
+		println("Contract deployment successful!")
+
+		var evmReceipt types.Receipt
+		if leftOverGas > 0 {
+			evmReceipt = makeEvmReceipt(vmenv, code, ctx.Block, address, leftOverGas)
+			fmt.Printf("Return evmReceipt value: %+v\n", evmReceipt)
+		}
+
+
+		receiptByt, err := encoder.Marshal(evmReceipt)
+		if err != nil {
+			return err
+		}
+		ctx.EmitExtra(receiptByt)
+
 	} else {
-		return executeContractCall(txReq, ethstate, cfg, vmenv, sender, rules)
+		if cfg.EVMConfig.Tracer != nil && cfg.EVMConfig.Tracer.OnTxStart != nil {
+			cfg.EVMConfig.Tracer.OnTxStart(vmenv.GetVMContext(), types.NewTx(&types.LegacyTx{To: &txReq.Address, Data: txReq.Input, Value: txReq.Value, Gas: txReq.GasLimit}), txReq.Origin)
+		}
+
+		ethstate.Prepare(rules, cfg.Origin, cfg.Coinbase, &txReq.Address, vm.ActivePrecompiles(rules), nil)
+		ethstate.SetNonce(txReq.Origin, ethstate.GetNonce(sender.Address())+1)
+
+		logrus.Printf("before transfer: account %s balance %d \n", sender.Address(), ethstate.stateDB.GetBalance(sender.Address()))
+
+		ret, leftOverGas, err := vmenv.Call(sender, txReq.Address, txReq.Input, txReq.GasLimit, uint256.MustFromBig(txReq.Value))
+		if err != nil {
+			return err
+		}
+
+		logrus.Printf("after  transfer: account %s balance %d \n", sender.Address(), ethstate.stateDB.GetBalance(sender.Address()))
+
+		println("Return ret value:", ret)
+		println("Return leftOverGas value:", leftOverGas)
+
+		var evmReceipt types.Receipt
+		if leftOverGas > 0 {
+			evmReceipt = makeEvmReceipt(vmenv, ret, ctx.Block, txReq.Address, leftOverGas)
+			fmt.Printf("Return evmReceipt value: %+v\n", evmReceipt)
+		}
+
+
+		receiptByt, err := encoder.Marshal(evmReceipt)
+		if err != nil {
+			return err
+		}
+		ctx.EmitExtra(receiptByt)
 	}
+
+	return nil
+
 }
 
 // Call executes the code given by the contract's address. It will return the
@@ -421,48 +484,30 @@ func AdaptHash(ethHash common.Hash) yu_common.Hash {
 	return yuHash
 }
 
-func executeContractCreation(txReq *TxRequest, ethState *EthState, cfg *GethConfig, vmenv *vm.EVM, sender vm.AccountRef, rules params.Rules) error {
-	if cfg.EVMConfig.Tracer != nil && cfg.EVMConfig.Tracer.OnTxStart != nil {
-		cfg.EVMConfig.Tracer.OnTxStart(vmenv.GetVMContext(), types.NewTx(&types.LegacyTx{Data: txReq.Input, Value: txReq.Value, Gas: txReq.GasLimit}), txReq.Origin)
+func makeEvmReceipt(vmenv *vm.EVM, code []byte, block *yu_types.Block, address common.Address, leftOverGas uint64) types.Receipt {
+	blockNumber := vmenv.Context.BlockNumber
+	txHash := common.BytesToHash(code)
+	effectiveGasPrice := big.NewInt(1000000000) // 1 GWei
+	bloom := types.Bloom{}
+	logs := []*types.Log{}
+
+	return types.Receipt{
+		Type:              0,
+		PostState:         code,
+		Status:            1,
+		CumulativeGasUsed: leftOverGas,
+		Bloom:             bloom,
+		Logs:              logs,
+		TxHash:            txHash,
+		ContractAddress:   address,
+		GasUsed:           leftOverGas,
+		EffectiveGasPrice: effectiveGasPrice,
+		BlobGasUsed:       0,
+		BlobGasPrice:      big.NewInt(0),
+		BlockHash:         common.Hash(block.Hash),
+		BlockNumber:       blockNumber,
+		TransactionIndex:  0,
 	}
-
-	ethState.Prepare(rules, cfg.Origin, cfg.Coinbase, nil, vm.ActivePrecompiles(rules), nil)
-
-	code, address, leftOverGas, err := vmenv.Create(sender, txReq.Input, txReq.GasLimit, uint256.MustFromBig(txReq.Value))
-	if err != nil {
-		return err
-	}
-
-	println("Return code value:", code)
-	println("Return code value:", hex.EncodeToString(code))
-	println("Return address value:", address.Hex())
-	println("Return leftOverGas value:", leftOverGas)
-	println("Contract deployment successful!")
-
-	return nil
-}
-
-func executeContractCall(txReq *TxRequest, ethState *EthState, cfg *GethConfig, vmenv *vm.EVM, sender vm.AccountRef, rules params.Rules) error {
-	if cfg.EVMConfig.Tracer != nil && cfg.EVMConfig.Tracer.OnTxStart != nil {
-		cfg.EVMConfig.Tracer.OnTxStart(vmenv.GetVMContext(), types.NewTx(&types.LegacyTx{To: &txReq.Address, Data: txReq.Input, Value: txReq.Value, Gas: txReq.GasLimit}), txReq.Origin)
-	}
-
-	ethState.Prepare(rules, cfg.Origin, cfg.Coinbase, &txReq.Address, vm.ActivePrecompiles(rules), nil)
-	ethState.SetNonce(txReq.Origin, ethState.GetNonce(sender.Address())+1)
-
-	logrus.Printf("before transfer: account %s balance %d \n", sender.Address(), ethState.stateDB.GetBalance(sender.Address()))
-
-	ret, leftOverGas, err := vmenv.Call(sender, txReq.Address, txReq.Input, txReq.GasLimit, uint256.MustFromBig(txReq.Value))
-	if err != nil {
-		return err
-	}
-
-	logrus.Printf("after  transfer: account %s balance %d \n", sender.Address(), ethState.stateDB.GetBalance(sender.Address()))
-
-	println("Return ret value:", ret)
-	println("Return leftOverGas value:", leftOverGas)
-
-	return nil
 }
 
 func (s *Solidity) StateAt(root common.Hash) (*state.StateDB, error) {
