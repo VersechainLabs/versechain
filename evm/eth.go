@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/BurntSushi/toml"
+	"github.com/NethermindEth/juno/encoder"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/yu-org/yu/common/yerror"
 	"itachi/evm/config"
@@ -264,16 +265,18 @@ func NewSolidity(gethConfig *GethConfig) *Solidity {
 
 	solidity.SetWritings(solidity.ExecuteTxn)
 	solidity.SetReadings(
-		solidity.Call,
+		solidity.Call, solidity.GetReceipt,
 		// solidity.GetClass, solidity.GetClassAt,
 		// 	solidity.GetClassHashAt, solidity.GetNonce, solidity.GetStorage,
-		// 	solidity.GetTransaction, solidity.GetTransactionStatus, solidity.GetReceipt,
+		// 	solidity.GetTransaction, solidity.GetTransactionStatus,
 		// 	solidity.SimulateTransactions,
 		// 	solidity.GetBlockWithTxs, solidity.GetBlockWithTxHashes,
 	)
 
 	return solidity
 }
+
+// region ---- Tripod Api ----
 
 func (s *Solidity) CheckTxn(txn *yu_types.SignedTxn) error {
 	var txReq TxRequest
@@ -283,13 +286,11 @@ func (s *Solidity) CheckTxn(txn *yu_types.SignedTxn) error {
 		return err
 	}
 
-	var txnHash [yu_common.HashLen]byte
-	if len(txReq.Hash.Bytes()) == yu_common.HashLen {
-		copy(txnHash[:], txReq.Hash.Bytes())
-		txn.TxnHash = txnHash
-	} else {
-		return errors.New(fmt.Sprintf("Expected hash to be 32 bytes long, but got %d bytes", len(txReq.Hash.Bytes())))
+	yuHash, err := ConvertHashToYuHash(txReq.Hash)
+	if err != nil {
+		return err
 	}
+	txn.TxnHash = yuHash
 
 	return nil
 }
@@ -331,10 +332,70 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 	rules := cfg.ChainConfig.Rules(vmenv.Context.BlockNumber, vmenv.Context.Random != nil, vmenv.Context.Time)
 
 	if txReq.Address == zeroAddress {
-		return executeContractCreation(txReq, ethstate, cfg, vmenv, sender, rules)
+		if cfg.EVMConfig.Tracer != nil && cfg.EVMConfig.Tracer.OnTxStart != nil {
+			cfg.EVMConfig.Tracer.OnTxStart(vmenv.GetVMContext(), types.NewTx(&types.LegacyTx{Data: txReq.Input, Value: txReq.Value, Gas: txReq.GasLimit}), txReq.Origin)
+		}
+
+		ethstate.Prepare(rules, cfg.Origin, cfg.Coinbase, nil, vm.ActivePrecompiles(rules), nil)
+
+		code, address, leftOverGas, err := vmenv.Create(sender, txReq.Input, txReq.GasLimit, uint256.MustFromBig(txReq.Value))
+		if err != nil {
+			return err
+		}
+
+		println("Return code value:", code)
+		println("Return code value:", hex.EncodeToString(code))
+		println("Return address value:", address.Hex())
+		println("Return leftOverGas value:", leftOverGas)
+		println("Contract deployment successful!")
+
+		var evmReceipt types.Receipt
+		if leftOverGas > 0 {
+			evmReceipt = makeEvmReceipt(vmenv, code, ctx.Block, address, leftOverGas)
+			fmt.Printf("Return evmReceipt value: %+v\n", evmReceipt)
+		}
+
+		receiptByt, err := encoder.Marshal(evmReceipt)
+		if err != nil {
+			return err
+		}
+		ctx.EmitExtra(receiptByt)
+
 	} else {
-		return executeContractCall(txReq, ethstate, cfg, vmenv, sender, rules)
+		if cfg.EVMConfig.Tracer != nil && cfg.EVMConfig.Tracer.OnTxStart != nil {
+			cfg.EVMConfig.Tracer.OnTxStart(vmenv.GetVMContext(), types.NewTx(&types.LegacyTx{To: &txReq.Address, Data: txReq.Input, Value: txReq.Value, Gas: txReq.GasLimit}), txReq.Origin)
+		}
+
+		ethstate.Prepare(rules, cfg.Origin, cfg.Coinbase, &txReq.Address, vm.ActivePrecompiles(rules), nil)
+		ethstate.SetNonce(txReq.Origin, ethstate.GetNonce(sender.Address())+1)
+
+		logrus.Printf("before transfer: account %s balance %d \n", sender.Address(), ethstate.stateDB.GetBalance(sender.Address()))
+
+		ret, leftOverGas, err := vmenv.Call(sender, txReq.Address, txReq.Input, txReq.GasLimit, uint256.MustFromBig(txReq.Value))
+		if err != nil {
+			return err
+		}
+
+		logrus.Printf("after  transfer: account %s balance %d \n", sender.Address(), ethstate.stateDB.GetBalance(sender.Address()))
+
+		println("Return ret value:", ret)
+		println("Return leftOverGas value:", leftOverGas)
+
+		var evmReceipt types.Receipt
+		if leftOverGas > 0 {
+			evmReceipt = makeEvmReceipt(vmenv, ret, ctx.Block, txReq.Address, leftOverGas)
+			fmt.Printf("Return evmReceipt value: %+v\n", evmReceipt)
+		}
+
+		receiptByt, err := json.Marshal(evmReceipt)
+		if err != nil {
+			return err
+		}
+		ctx.EmitExtra(receiptByt)
 	}
+
+	return nil
+
 }
 
 // Call executes the code given by the contract's address. It will return the
@@ -421,48 +482,30 @@ func AdaptHash(ethHash common.Hash) yu_common.Hash {
 	return yuHash
 }
 
-func executeContractCreation(txReq *TxRequest, ethState *EthState, cfg *GethConfig, vmenv *vm.EVM, sender vm.AccountRef, rules params.Rules) error {
-	if cfg.EVMConfig.Tracer != nil && cfg.EVMConfig.Tracer.OnTxStart != nil {
-		cfg.EVMConfig.Tracer.OnTxStart(vmenv.GetVMContext(), types.NewTx(&types.LegacyTx{Data: txReq.Input, Value: txReq.Value, Gas: txReq.GasLimit}), txReq.Origin)
+func makeEvmReceipt(vmenv *vm.EVM, code []byte, block *yu_types.Block, address common.Address, leftOverGas uint64) types.Receipt {
+	blockNumber := vmenv.Context.BlockNumber
+	txHash := common.BytesToHash(code)
+	effectiveGasPrice := big.NewInt(1000000000) // 1 GWei
+	bloom := types.Bloom{}
+	logs := []*types.Log{}
+
+	return types.Receipt{
+		Type:              0,
+		PostState:         code,
+		Status:            1,
+		CumulativeGasUsed: leftOverGas,
+		Bloom:             bloom,
+		Logs:              logs,
+		TxHash:            txHash,
+		ContractAddress:   address,
+		GasUsed:           leftOverGas,
+		EffectiveGasPrice: effectiveGasPrice,
+		BlobGasUsed:       0,
+		BlobGasPrice:      big.NewInt(0),
+		BlockHash:         common.Hash(block.Hash),
+		BlockNumber:       blockNumber,
+		TransactionIndex:  0,
 	}
-
-	ethState.Prepare(rules, cfg.Origin, cfg.Coinbase, nil, vm.ActivePrecompiles(rules), nil)
-
-	code, address, leftOverGas, err := vmenv.Create(sender, txReq.Input, txReq.GasLimit, uint256.MustFromBig(txReq.Value))
-	if err != nil {
-		return err
-	}
-
-	println("Return code value:", code)
-	println("Return code value:", hex.EncodeToString(code))
-	println("Return address value:", address.Hex())
-	println("Return leftOverGas value:", leftOverGas)
-	println("Contract deployment successful!")
-
-	return nil
-}
-
-func executeContractCall(txReq *TxRequest, ethState *EthState, cfg *GethConfig, vmenv *vm.EVM, sender vm.AccountRef, rules params.Rules) error {
-	if cfg.EVMConfig.Tracer != nil && cfg.EVMConfig.Tracer.OnTxStart != nil {
-		cfg.EVMConfig.Tracer.OnTxStart(vmenv.GetVMContext(), types.NewTx(&types.LegacyTx{To: &txReq.Address, Data: txReq.Input, Value: txReq.Value, Gas: txReq.GasLimit}), txReq.Origin)
-	}
-
-	ethState.Prepare(rules, cfg.Origin, cfg.Coinbase, &txReq.Address, vm.ActivePrecompiles(rules), nil)
-	ethState.SetNonce(txReq.Origin, ethState.GetNonce(sender.Address())+1)
-
-	logrus.Printf("before transfer: account %s balance %d \n", sender.Address(), ethState.stateDB.GetBalance(sender.Address()))
-
-	ret, leftOverGas, err := vmenv.Call(sender, txReq.Address, txReq.Input, txReq.GasLimit, uint256.MustFromBig(txReq.Value))
-	if err != nil {
-		return err
-	}
-
-	logrus.Printf("after  transfer: account %s balance %d \n", sender.Address(), ethState.stateDB.GetBalance(sender.Address()))
-
-	println("Return ret value:", ret)
-	println("Return leftOverGas value:", leftOverGas)
-
-	return nil
 }
 
 func (s *Solidity) StateAt(root common.Hash) (*state.StateDB, error) {
@@ -472,3 +515,48 @@ func (s *Solidity) StateAt(root common.Hash) (*state.StateDB, error) {
 func (s *Solidity) GetEthDB() ethdb.Database {
 	return s.ethState.ethDB
 }
+
+type ReceiptRequest struct {
+	Hash common.Hash `json:"hash"`
+}
+
+type ReceiptResponse struct {
+	Receipt *types.Receipt `json:"receipt"`
+	Err     error          `json:"err"`
+}
+
+func (s *Solidity) GetReceipt(ctx *context.ReadContext) {
+	var rq ReceiptRequest
+	err := ctx.BindJson(&rq)
+	if err != nil {
+		ctx.Json(http.StatusBadRequest, &ReceiptResponse{Err: err})
+		return
+	}
+
+	receipt, err := s.getReceipt(rq.Hash)
+	if err != nil {
+		ctx.Json(http.StatusInternalServerError, &ReceiptResponse{Err: err})
+		return
+	}
+
+	ctx.JsonOk(&ReceiptResponse{Receipt: receipt})
+}
+
+func (s *Solidity) getReceipt(hash common.Hash) (*types.Receipt, error) {
+	yuHash, err := ConvertHashToYuHash(hash)
+	if err != nil {
+		return nil, err
+	}
+	yuReceipt, err := s.TxDB.GetReceipt(yuHash)
+	if err != nil {
+		return nil, err
+	}
+	if yuReceipt == nil {
+		return nil, errors.New("no receipt found")
+	}
+	receipt := new(types.Receipt)
+	err = json.Unmarshal(yuReceipt.Extra, receipt)
+	return receipt, err
+}
+
+// endregion ---- Tripod Api ----
