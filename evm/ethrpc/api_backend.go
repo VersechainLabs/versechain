@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
@@ -239,7 +240,18 @@ func (e *EthAPIBackend) Pending() (*types.Block, types.Receipts, *state.StateDB)
 	panic("implement me")
 }
 
-func (e *EthAPIBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
+// Get all receipts in specific block
+func (e *EthAPIBackend) GetReceipts(ctx context.Context, blockHash common.Hash) (types.Receipts, error) {
+	block, _ := e.BlockByHash(ctx, blockHash)
+	if block == nil {
+		return nil, errors.New("block not found")
+	}
+	fmt.Printf("[GetReceipts]: Tx Count: %v\n", len(block.Transactions()))
+	for _, transaction := range block.Transactions() {
+		byt, _ := json.Marshal(transaction)
+		fmt.Printf("transaction: %s\n", string(byt))
+	}
+
 	//TODO implement me
 	panic("implement me")
 }
