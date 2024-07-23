@@ -33,6 +33,7 @@ type EthAPIBackend struct {
 	allowUnprotectedTxs bool
 	ethChainCfg         *params.ChainConfig
 	chain               *kernel.Kernel
+	gasPriceCache       *EthGasPrice
 }
 
 func (e *EthAPIBackend) SyncProgress() ethereum.SyncProgress {
