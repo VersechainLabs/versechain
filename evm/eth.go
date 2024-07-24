@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/BurntSushi/toml"
-	"github.com/NethermindEth/juno/encoder"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/yu-org/yu/common/yerror"
 	"itachi/evm/config"
@@ -357,7 +356,7 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 			fmt.Printf("Return evmReceipt value: %+v\n", evmReceipt)
 		}
 
-		receiptByt, err := encoder.Marshal(evmReceipt)
+		receiptByt, err := json.Marshal(evmReceipt)
 		if err != nil {
 			return err
 		}
@@ -378,7 +377,7 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 			return err
 		}
 
-		logrus.Printf("after  transfer: account %s balance %d \n", sender.Address(), ethstate.stateDB.GetBalance(sender.Address()))
+		logrus.Printf("after transfer: account %s balance %d \n", sender.Address(), ethstate.stateDB.GetBalance(sender.Address()))
 
 		println("Return ret value:", ret)
 		println("Return leftOverGas value:", leftOverGas)
