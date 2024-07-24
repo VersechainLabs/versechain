@@ -3,12 +3,14 @@ package main
 import (
 	"crypto/ecdsa"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/rlp"
 	abigen "itachi/cmd/test/abi"
 	"itachi/evm"
 	"log"
@@ -39,8 +41,9 @@ func init() {
 }
 
 func main() {
-	testGetBalance()
-	//testCreateContract()
+	//testTransferEth()
+	//testGetBalance()
+	testCreateContract()
 	//testMintErc20()
 }
 
@@ -55,9 +58,9 @@ func testGetBalance() {
 
 func testTransferEth() {
 	nonce := uint64(0)
-	to := common.HexToAddress("0x2Efe24c33f049Ffec693ec1D809A45Fff14e9527")
+	to := common.HexToAddress("0x756c2d2bb2b4a2b82939861072eb687c6b6f5d93")
 	gasLimit := uint64(21000)
-	gasPrice := big.NewInt(0)
+	gasPrice := big.NewInt(1)
 	var data []byte
 
 	tx := types.NewTx(&types.LegacyTx{
@@ -68,6 +71,8 @@ func testTransferEth() {
 		Value:    ether,
 		Data:     data,
 	})
+
+	printTxDetail(tx)
 
 	rawTx := SignTransaction(gethCfg, testWalletPrivateKeyStr, tx)
 	requestBody := GenerateRequestBody("eth_sendRawTransaction", rawTx)
@@ -99,6 +104,15 @@ func testCreateContract() {
 		Value:    amount,
 		Data:     data,
 	})
+
+	printTxDetail(tx)
+
+	estimateGasBody := GenerateRequestBody("eth_estimateGas", tx)
+	log.Println(estimateGasBody)
+	estimateGasResponse := SendRequest(estimateGasBody)
+	log.Println(ParseResponse(estimateGasResponse))
+
+	log.Println("--------")
 
 	rawTx := SignTransaction(gethCfg, testWalletPrivateKeyStr, tx)
 	requestBody := GenerateRequestBody("eth_sendRawTransaction", rawTx)
@@ -175,4 +189,28 @@ func testTransferErc20() {
 	log.Println(requestBody)
 	response := SendRequest(requestBody)
 	log.Println(ParseResponse(response))
+}
+
+func printTxDetail(tx *types.Transaction) {
+	log.Println("---- Tx Detail Start ----")
+	originTxByte, _ := json.Marshal(tx)
+	log.Printf("[TxDetail] Befroe sign = %v", string(originTxByte))
+
+	privateKey, err := crypto.HexToECDSA(testWalletPrivateKeyStr)
+	if err != nil {
+		log.Fatal(err)
+	}
+	chainID := gethCfg.ChainConfig.ChainID
+	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(chainID), privateKey)
+	signedTxByte, _ := json.Marshal(signedTx)
+	log.Printf("[TxDetail] After sign = %v", string(signedTxByte))
+
+	rawTxBytes, err := rlp.EncodeToBytes(signedTx)
+	if err != nil {
+		log.Fatal(err)
+	}
+	rawTx := fmt.Sprintf("0x%x", rawTxBytes)
+	rawTxByte, _ := json.Marshal(rawTx)
+	log.Printf("[TxDetail] Raw = %v", string(rawTxByte))
+	log.Println("---- Tx Detail End ----")
 }
