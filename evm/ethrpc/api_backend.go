@@ -321,6 +321,7 @@ func (e *EthAPIBackend) SendTx(ctx context.Context, signedTx *types.Transaction)
 	txReq := &evm.TxRequest{
 		Input:    signedTx.Data(),
 		Origin:   sender,
+		Address:  signedTx.To(),
 		GasLimit: signedTx.Gas(),
 		GasPrice: signedTx.GasPrice(),
 		Value:    signedTx.Value(),
@@ -328,9 +329,6 @@ func (e *EthAPIBackend) SendTx(ctx context.Context, signedTx *types.Transaction)
 		V:        v,
 		R:        r,
 		S:        s,
-	}
-	if signedTx.To() != nil {
-		txReq.Address = *signedTx.To()
 	}
 	byt, err := json.Marshal(txReq)
 	logrus.Printf("SendTx, Request=%+v\n", string(byt))
@@ -355,12 +353,11 @@ func yuTxn2EthTxn(yuSignedTxn *yutypes.SignedTxn) *types.Transaction {
 
 	// if nonce is assigned to signedTx.Raw.Nonce, then this is ok; otherwise it's nil:
 	nonce := yuSignedTxn.Raw.Nonce
-
 	tx := types.NewTx(&types.LegacyTx{
 		Nonce:    nonce,
 		GasPrice: txReq.GasPrice,
 		Gas:      txReq.GasLimit, // gasLimit: should be obtained from Block & Settings
-		To:       &txReq.Address,
+		To:       txReq.Address,
 		Value:    txReq.Value,
 		Data:     txReq.Input,
 		V:        txReq.V,

@@ -307,8 +307,6 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 		return err
 	}
 
-	zeroAddress := common.Address{}
-
 	origin := txReq.Origin
 	gasLimit := txReq.GasLimit
 	gasPrice := txReq.GasPrice
@@ -332,7 +330,7 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 	sender := vm.AccountRef(txReq.Origin)
 	rules := cfg.ChainConfig.Rules(vmenv.Context.BlockNumber, vmenv.Context.Random != nil, vmenv.Context.Time)
 
-	if txReq.Address == zeroAddress {
+	if txReq.Address == nil {
 		if cfg.EVMConfig.Tracer != nil && cfg.EVMConfig.Tracer.OnTxStart != nil {
 			cfg.EVMConfig.Tracer.OnTxStart(vmenv.GetVMContext(), types.NewTx(&types.LegacyTx{Data: txReq.Input, Value: txReq.Value, Gas: txReq.GasLimit}), txReq.Origin)
 		}
@@ -364,15 +362,15 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 
 	} else {
 		if cfg.EVMConfig.Tracer != nil && cfg.EVMConfig.Tracer.OnTxStart != nil {
-			cfg.EVMConfig.Tracer.OnTxStart(vmenv.GetVMContext(), types.NewTx(&types.LegacyTx{To: &txReq.Address, Data: txReq.Input, Value: txReq.Value, Gas: txReq.GasLimit}), txReq.Origin)
+			cfg.EVMConfig.Tracer.OnTxStart(vmenv.GetVMContext(), types.NewTx(&types.LegacyTx{To: txReq.Address, Data: txReq.Input, Value: txReq.Value, Gas: txReq.GasLimit}), txReq.Origin)
 		}
 
-		ethstate.Prepare(rules, cfg.Origin, cfg.Coinbase, &txReq.Address, vm.ActivePrecompiles(rules), nil)
+		ethstate.Prepare(rules, cfg.Origin, cfg.Coinbase, txReq.Address, vm.ActivePrecompiles(rules), nil)
 		ethstate.SetNonce(txReq.Origin, ethstate.GetNonce(sender.Address())+1)
 
 		logrus.Printf("before transfer: account %s balance %d \n", sender.Address(), ethstate.stateDB.GetBalance(sender.Address()))
 
-		ret, leftOverGas, err := vmenv.Call(sender, txReq.Address, txReq.Input, txReq.GasLimit, uint256.MustFromBig(txReq.Value))
+		ret, leftOverGas, err := vmenv.Call(sender, *txReq.Address, txReq.Input, txReq.GasLimit, uint256.MustFromBig(txReq.Value))
 		if err != nil {
 			return err
 		}
@@ -384,7 +382,7 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 
 		var evmReceipt types.Receipt
 		if leftOverGas > 0 {
-			evmReceipt = makeEvmReceipt(ret, ctx.Txn, ctx.Block, txReq.Address, leftOverGas)
+			evmReceipt = makeEvmReceipt(ret, ctx.Txn, ctx.Block, *txReq.Address, leftOverGas)
 			fmt.Printf("Return evmReceipt value: %+v\n", evmReceipt)
 		}
 
