@@ -490,7 +490,6 @@ func makeEvmReceipt(code []byte, signedTx *yu_types.SignedTxn, block *yu_types.B
 
 	return types.Receipt{
 		Type:              0,
-		PostState:         code,
 		Status:            1,
 		CumulativeGasUsed: leftOverGas,
 		Bloom:             bloom,
