@@ -7,16 +7,18 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rlp"
 	abigen "itachi/cmd/test/abi"
 	"itachi/evm"
+	"itachi/evm/ethrpc"
 	"log"
 	"math/big"
 	"os"
-	"strconv"
+	"time"
 )
 
 const (
@@ -45,6 +47,7 @@ func main() {
 	//testGetBalance()
 	testCreateContract()
 	//testMintErc20()
+	//testErc20DeployAndUse()
 }
 
 func testGetBalance() {
@@ -52,8 +55,8 @@ func testGetBalance() {
 	checkBalanceBody := GenerateRequestBody("eth_getBalance", checkBalanceParam...)
 	log.Println(checkBalanceBody)
 	response := SendRequest(checkBalanceBody)
-	result, _ := strconv.ParseInt(ParseResponse(response), 16, 64)
-	log.Println(fmt.Sprintf("Response: %s, Balance: %d", ParseResponse(response), result))
+	result := ParseResponseAsBigInt(response)
+	log.Println(fmt.Sprintf("Balance: %d (%d ether)", result, new(big.Int).Div(result, ether)))
 }
 
 func testTransferEth() {
@@ -78,7 +81,7 @@ func testTransferEth() {
 	requestBody := GenerateRequestBody("eth_sendRawTransaction", rawTx)
 	log.Println(requestBody)
 	response := SendRequest(requestBody)
-	log.Println(ParseResponse(response))
+	log.Println(ParseResponse[string](response))
 }
 
 func testCreateContract() {
@@ -87,38 +90,34 @@ func testCreateContract() {
 		log.Fatal("failed to load bin file: ", err)
 	}
 
-	nonce := uint64(0)
-	amount := big.NewInt(0)
-	gasLimit := uint64(21000000)
-	gasPrice := big.NewInt(0)
+	// estimate gas
 	data, err := hex.DecodeString(string(contractBinByte))
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	gasLimit := estimateGas(data)
+	nonce := getNonce()
+	gasPrice := getGasPrice()
 
 	tx := types.NewTx(&types.LegacyTx{
 		Nonce:    nonce,
 		GasPrice: gasPrice,
 		Gas:      gasLimit,
 		To:       nil,
-		Value:    amount,
 		Data:     data,
 	})
-
-	printTxDetail(tx)
-
-	estimateGasBody := GenerateRequestBody("eth_estimateGas", tx)
-	log.Println(estimateGasBody)
-	estimateGasResponse := SendRequest(estimateGasBody)
-	log.Println(ParseResponse(estimateGasResponse))
-
-	log.Println("--------")
-
 	rawTx := SignTransaction(gethCfg, testWalletPrivateKeyStr, tx)
 	requestBody := GenerateRequestBody("eth_sendRawTransaction", rawTx)
-	log.Println(requestBody)
 	response := SendRequest(requestBody)
-	log.Println(ParseResponse(response))
+
+	txHash := *ParseResponse[string](response)
+	log.Printf("create contract's txHash: %s", txHash)
+	receiptChan := waitForReceipt(txHash)
+	receipt := <-receiptChan
+	contractAddr := receipt.ContractAddress
+
+	log.Printf("create contract's contractAddr: %s", contractAddr)
 }
 
 func testMintErc20() {
@@ -146,7 +145,7 @@ func testMintErc20() {
 	requestBody := GenerateRequestBody("eth_sendRawTransaction", rawTx)
 	log.Println(requestBody)
 	response := SendRequest(requestBody)
-	log.Println(ParseResponse(response))
+	log.Println(ParseResponse[string](response))
 }
 
 func testMintErc20ByAbi() {
@@ -188,7 +187,7 @@ func testTransferErc20() {
 	requestBody := GenerateRequestBody("eth_sendRawTransaction", rawTx)
 	log.Println(requestBody)
 	response := SendRequest(requestBody)
-	log.Println(ParseResponse(response))
+	log.Println(ParseResponse[string](response))
 }
 
 func printTxDetail(tx *types.Transaction) {
@@ -213,4 +212,69 @@ func printTxDetail(tx *types.Transaction) {
 	rawTxByte, _ := json.Marshal(rawTx)
 	log.Printf("[TxDetail] Raw = %v", string(rawTxByte))
 	log.Println("---- Tx Detail End ----")
+}
+
+func estimateGas(data hexutil.Bytes) uint64 {
+	arg := ethrpc.TransactionArgs{
+		From: &testWalletAddr,
+		To:   nil,
+		Data: &data,
+	}
+	estimateGasBody := GenerateRequestBody("eth_estimateGas", arg)
+	estimateGasResponse := SendRequest(estimateGasBody)
+	return ParseResponseAsBigInt(estimateGasResponse).Uint64()
+}
+
+func getNonce() uint64 {
+	getNonceRequest := GenerateRequestBody("eth_getTransactionCount", testWalletAddrStr, "latest")
+	getNonceResponse := SendRequest(getNonceRequest)
+	return ParseResponseAsBigInt(getNonceResponse).Uint64()
+}
+
+func getGasPrice() *big.Int {
+	request := GenerateRequestBody("eth_gasPrice")
+	response := SendRequest(request)
+	return ParseResponseAsBigInt(response)
+}
+
+func getTransactionReceipt(txHash string) (receipt *types.Receipt, err error) {
+	requestBody := GenerateRequestBody("eth_getTransactionReceipt", txHash)
+	response := SendRequest(requestBody)
+
+	receipt = ParseResponse[types.Receipt](response)
+	return receipt, nil
+}
+
+func waitForReceipt(txHash string) <-chan *types.Receipt {
+	receiptChan := make(chan *types.Receipt)
+
+	go func() {
+		defer close(receiptChan)
+
+		for {
+			receipt, err := getTransactionReceipt(txHash)
+			if err != nil {
+				log.Printf("Error getting transaction receipt: %v", err)
+				time.Sleep(1 * time.Second)
+				continue
+			}
+
+			if receipt == nil {
+				//log.Println("Transaction receipt is not available yet (no receipt). Waiting...")
+				time.Sleep(1 * time.Second)
+				continue
+			}
+
+			if receipt.Status != types.ReceiptStatusSuccessful {
+				//log.Println("Receipt status is not successful. Waiting...")
+				time.Sleep(1 * time.Second)
+				continue
+			}
+
+			receiptChan <- receipt
+			return
+		}
+	}()
+
+	return receiptChan
 }

@@ -13,6 +13,7 @@ import (
 	"io"
 	"itachi/evm"
 	"log"
+	"math/big"
 	"net/http"
 )
 
@@ -82,20 +83,27 @@ func GeneratePrivateKey() (string, string) {
 	return hexutil.Encode(privateKeyBytes)[2:], address
 }
 
-type JSONResponse struct {
+type JSONResponse[T any] struct {
 	Jsonrpc string `json:"jsonrpc"`
 	ID      int    `json:"id"`
-	Result  string `json:"result"`
+	Result  T      `json:"result,omitempty"`
 }
 
-func ParseResponse(response string) string {
-	var resp JSONResponse
+func ParseResponse[T any](response string) *T {
+	var resp JSONResponse[*T]
 	err := json.Unmarshal([]byte(response), &resp)
 	if err != nil {
+		fmt.Println(response)
 		log.Fatalf("Error parsing JSON: %v", err)
 	}
 
 	return resp.Result
+}
+
+func ParseResponseAsBigInt(response string) *big.Int {
+	responseStr := ParseResponse[string](response)
+	result, _ := big.NewInt(0).SetString(*responseStr, 0)
+	return result
 }
 
 func SignTransaction(gethCfg *evm.GethConfig, privateKeyStr string, tx *types.Transaction) string {
