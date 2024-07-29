@@ -382,7 +382,7 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 
 		var evmReceipt types.Receipt
 		if leftOverGas > 0 {
-			evmReceipt = makeEvmReceipt(ret, ctx.Txn, ctx.Block, *txReq.Address, leftOverGas)
+			evmReceipt = makeEvmReceipt(ret, ctx.Txn, ctx.Block, common.Address{}, leftOverGas)
 			fmt.Printf("Return evmReceipt value: %+v\n", evmReceipt)
 		}
 
