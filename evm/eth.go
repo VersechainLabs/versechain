@@ -276,7 +276,7 @@ func NewSolidity(gethConfig *GethConfig) *Solidity {
 
 // region ---- Tripod Api ----
 
-func (s *Solidity) CheckTxn(txn *yu_types.SignedTxn) error {
+func (s *Solidity) PreHandleTxn(txn *yu_types.SignedTxn) error {
 	var txReq TxRequest
 	param := txn.GetParams()
 	err := json.Unmarshal([]byte(param), &txReq)
