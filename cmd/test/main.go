@@ -199,8 +199,8 @@ func printTxDetail(tx *types.Transaction) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	chainID := gethCfg.ChainConfig.ChainID
-	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(chainID), privateKey)
+	signer := types.LatestSigner(gethCfg.ChainConfig)
+	signedTx, err := types.SignTx(tx, signer, privateKey)
 	signedTxByte, _ := json.Marshal(signedTx)
 	log.Printf("[TxDetail] After sign = %v", string(signedTxByte))
 

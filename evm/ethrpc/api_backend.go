@@ -327,7 +327,8 @@ func (e *EthAPIBackend) SendTx(ctx context.Context, signedTx *types.Transaction)
 	}
 
 	// Create Tx
-	signer := types.NewEIP155Signer(e.ethChainCfg.ChainID)
+	head := e.CurrentBlock()
+	signer := types.MakeSigner(e.ChainConfig(), head.Number, head.Time)
 	sender, err := types.Sender(signer, signedTx)
 	if err != nil {
 		return err
@@ -543,7 +544,7 @@ func yuHeader2EthHeader(yuHeader *yutypes.Header) *types.Header {
 		Time:        yuHeader.Timestamp,
 		Extra:       yuHeader.Extra,
 		Nonce:       types.BlockNonce{},
-		BaseFee:     nil,
+		BaseFee:     big.NewInt(params.InitialBaseFee),
 	}
 }
 
