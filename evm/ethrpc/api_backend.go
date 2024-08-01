@@ -544,7 +544,7 @@ func yuHeader2EthHeader(yuHeader *yutypes.Header) *types.Header {
 		Time:        yuHeader.Timestamp,
 		Extra:       yuHeader.Extra,
 		Nonce:       types.BlockNonce{},
-		BaseFee:     nil,
+		BaseFee:     big.NewInt(params.InitialBaseFee),
 	}
 }
 
