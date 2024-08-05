@@ -5,7 +5,6 @@ import (
 
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"github.com/BurntSushi/toml"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/yu-org/yu/common/yerror"
@@ -507,7 +506,7 @@ func (s *Solidity) getReceipt(hash common.Hash) (*types.Receipt, error) {
 		return nil, err
 	}
 	if yuReceipt == nil {
-		return nil, errors.New("no receipt found")
+		return nil, ErrNotFoundReceipt
 	}
 	receipt := new(types.Receipt)
 	err = json.Unmarshal(yuReceipt.Extra, receipt)
