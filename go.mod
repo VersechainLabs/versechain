@@ -8,16 +8,21 @@ require (
 	github.com/BurntSushi/toml v1.2.1
 	github.com/NethermindEth/juno v0.8.1-0.20231228072404-6222563f6218
 	github.com/NethermindEth/starknet.go v0.7.0
+	github.com/cockroachdb/pebble v1.1.0
 	github.com/common-nighthawk/go-figure v0.0.0-20210622060536-734e95fb86be
 	github.com/davecgh/go-spew v1.1.1
 	github.com/ethereum/go-ethereum v1.14.0
+	github.com/gorilla/websocket v1.5.3
 	github.com/holiman/uint256 v1.2.4
 	github.com/jinzhu/copier v0.3.5
+	github.com/libp2p/go-libp2p v0.35.4
+	github.com/pkg/errors v0.9.1
 	github.com/rs/cors v1.10.1
 	github.com/sirupsen/logrus v1.9.0
 	github.com/sourcegraph/conc v0.2.0
 	github.com/stretchr/testify v1.9.0
 	github.com/yu-org/yu v0.0.0-20240730044908-8faa4198641e
+	go.uber.org/atomic v1.11.0
 )
 
 require (
@@ -42,7 +47,6 @@ require (
 	github.com/chenzhuoyu/iasm v0.9.0 // indirect
 	github.com/cockroachdb/errors v1.11.1 // indirect
 	github.com/cockroachdb/logtags v0.0.0-20230118201751-21c54148d20b // indirect
-	github.com/cockroachdb/pebble v1.1.0 // indirect
 	github.com/cockroachdb/redact v1.1.5 // indirect
 	github.com/cockroachdb/tokenbucket v0.0.0-20230807174530-cc333fc44b06 // indirect
 	github.com/consensys/bavard v0.1.13 // indirect
@@ -85,7 +89,6 @@ require (
 	github.com/google/gopacket v1.1.19 // indirect
 	github.com/google/pprof v0.0.0-20240207164012-fb44976bdcd5 // indirect
 	github.com/google/uuid v1.4.0 // indirect
-	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/gtank/merlin v0.1.1 // indirect
 	github.com/gtank/ristretto255 v0.1.2 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
@@ -123,7 +126,6 @@ require (
 	github.com/libp2p/go-buffer-pool v0.1.0 // indirect
 	github.com/libp2p/go-cidranger v1.1.0 // indirect
 	github.com/libp2p/go-flow-metrics v0.1.0 // indirect
-	github.com/libp2p/go-libp2p v0.35.4 // indirect
 	github.com/libp2p/go-libp2p-asn-util v0.4.1 // indirect
 	github.com/libp2p/go-libp2p-kad-dht v0.24.2 // indirect
 	github.com/libp2p/go-libp2p-kbucket v0.6.3 // indirect
@@ -182,7 +184,6 @@ require (
 	github.com/pion/transport/v2 v2.2.5 // indirect
 	github.com/pion/turn/v2 v2.1.6 // indirect
 	github.com/pion/webrtc/v3 v3.2.40 // indirect
-	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/polydawn/refmt v0.89.0 // indirect
 	github.com/prometheus/client_golang v1.19.1 // indirect
@@ -217,7 +218,6 @@ require (
 	go.opentelemetry.io/otel v1.16.0 // indirect
 	go.opentelemetry.io/otel/metric v1.16.0 // indirect
 	go.opentelemetry.io/otel/trace v1.16.0 // indirect
-	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/dig v1.17.1 // indirect
 	go.uber.org/fx v1.22.1 // indirect
 	go.uber.org/mock v0.4.0 // indirect

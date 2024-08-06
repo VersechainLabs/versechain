@@ -6,7 +6,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
-	"github.com/yu-org/nine-tripods/MEVless"
 	. "github.com/yu-org/yu/common"
 	"github.com/yu-org/yu/common/yerror"
 	. "github.com/yu-org/yu/core/keypair"
@@ -14,6 +13,7 @@ import (
 	. "github.com/yu-org/yu/core/types"
 	"github.com/yu-org/yu/utils/log"
 	"go.uber.org/atomic"
+	"itachi/mev-less"
 	"time"
 )
 

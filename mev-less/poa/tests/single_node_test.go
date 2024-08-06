@@ -2,7 +2,7 @@ package tests
 
 import (
 	"github.com/stretchr/testify/assert"
-	"github.com/yu-org/nine-tripods/poa"
+	"itachi/mev-less/poa"
 	"github.com/yu-org/yu/apps/asset"
 	"github.com/yu-org/yu/core/keypair"
 	"github.com/yu-org/yu/core/startup"
