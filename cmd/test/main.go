@@ -43,9 +43,10 @@ func init() {
 }
 
 func main() {
+	TestReceiptForFailedTx()
 	//testTransferEth()
 	//testGetBalance()
-	testCreateContract()
+	//testCreateContract()
 	//testMintErc20()
 	//testErc20DeployAndUse()
 }
@@ -266,9 +267,9 @@ func waitForReceipt(txHash string) <-chan *types.Receipt {
 			}
 
 			if receipt.Status != types.ReceiptStatusSuccessful {
-				//log.Println("Receipt status is not successful. Waiting...")
-				time.Sleep(1 * time.Second)
-				continue
+				log.Println("Receipt status is not successful. ", ToJsonString(receipt))
+				//time.Sleep(1 * time.Second)
+				//continue
 			}
 
 			receiptChan <- receipt
@@ -277,4 +278,11 @@ func waitForReceipt(txHash string) <-chan *types.Receipt {
 	}()
 
 	return receiptChan
+}
+
+func getReceiptFromResponse(response string) *types.Receipt {
+	txHash := *ParseResponse[string](response)
+	receiptChan := waitForReceipt(txHash)
+	receipt := <-receiptChan
+	return receipt
 }

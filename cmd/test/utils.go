@@ -41,7 +41,7 @@ func GenerateRequestBody(method string, params ...interface{}) string {
 }
 
 func SendRequest(dataString string) string {
-	req, err := http.NewRequest("POST", "http://localhost:9092", bytes.NewBuffer([]byte(dataString)))
+	req, err := http.NewRequest("POST", "http://localhost:8545", bytes.NewBuffer([]byte(dataString)))
 	if err != nil {
 		fmt.Println("Error creating request:", err)
 		return ""
@@ -124,4 +124,9 @@ func SignTransaction(gethCfg *evm.GethConfig, privateKeyStr string, tx *types.Tr
 	}
 
 	return fmt.Sprintf("0x%x", rawTxBytes)
+}
+
+func ToJsonString(v interface{}) string {
+	byt, _ := json.Marshal(v)
+	return string(byt)
 }
