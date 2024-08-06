@@ -2,10 +2,12 @@ package MEVless
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/cockroachdb/pebble"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/sirupsen/logrus"
 	"github.com/yu-org/yu/common"
+	"github.com/yu-org/yu/core/context"
 	"github.com/yu-org/yu/core/tripod"
 	"github.com/yu-org/yu/core/types"
 	"slices"
@@ -38,8 +40,16 @@ func NewMEVless(cfg *Config) (*MEVless, error) {
 		commitmentsDB: db,
 		notifyCh:      make(chan *OrderCommitment, notifyBufferLen),
 	}
+
+	tri.SetWritings(tri.OrderTx)
+
 	go tri.HandleSubscribe()
 	return tri, nil
+}
+
+func (m *MEVless) OrderTx(ctx *context.WriteContext) error {
+	fmt.Printf("[OrderTx] %s\n]", ctx.Txn.TxnHash.Hex())
+	return nil
 }
 
 func (m *MEVless) Pack(blockNum common.BlockNum, numLimit uint64) ([]*types.SignedTxn, error) {
@@ -68,15 +78,12 @@ func (m *MEVless) PackFor(blockNum common.BlockNum, numLimit uint64, filter func
 // wrCall.params = "MEVless_(TxnHash)"
 func (m *MEVless) OrderCommitment(blockNum common.BlockNum) error {
 	hashTxns, err := m.Pool.PackFor(m.cfg.PackNumber, func(txn *types.SignedTxn) bool {
-		if txn.ParamsIsJson() {
-			return false
-		}
 		paramStr := txn.GetParams()
 		if !strings.HasPrefix(paramStr, Prefix) {
 			return false
 		}
 		hashStr := strings.TrimPrefix(paramStr, Prefix)
-		hashByt := []byte(hashStr)
+		hashByt := common.HexToHash(hashStr)
 		return len(hashByt) == common.HashLen
 	})
 	if err != nil {
@@ -184,6 +191,7 @@ func (m *MEVless) storeOrderCommitment(oc *OrderCommitment) error {
 }
 
 func (m *MEVless) notifyClient(oc *OrderCommitment) {
+	fmt.Printf("[NotifyClient] %#v\n", oc)
 	if len(m.notifyCh) == notifyBufferLen {
 		_ = <-m.notifyCh
 	}
