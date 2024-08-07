@@ -2,7 +2,9 @@ package MEVless
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/cockroachdb/pebble"
+	"github.com/gorilla/websocket"
 	"github.com/sirupsen/logrus"
 	"github.com/yu-org/yu/common"
 	"github.com/yu-org/yu/core/context"
@@ -11,6 +13,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -23,6 +26,9 @@ type MEVless struct {
 	commitmentsDB *pebble.DB
 
 	notifyCh chan *OrderCommitment
+
+	wsClients map[*websocket.Conn]bool
+	wsLock    sync.Mutex
 }
 
 const Prefix = "MEVless_"
@@ -37,6 +43,7 @@ func NewMEVless(cfg *Config) (*MEVless, error) {
 		cfg:           cfg,
 		commitmentsDB: db,
 		notifyCh:      make(chan *OrderCommitment, notifyBufferLen),
+		wsClients:     make(map[*websocket.Conn]bool),
 	}
 
 	tri.SetWritings(tri.OrderTx)
@@ -194,7 +201,7 @@ func (m *MEVless) storeOrderCommitment(oc *OrderCommitment) error {
 }
 
 func (m *MEVless) notifyClient(oc *OrderCommitment) {
-	//fmt.Printf("[NotifyClient] %#v\n", oc)
+	fmt.Printf("[NotifyClient] %#v\n", oc)
 	select {
 	case m.notifyCh <- oc:
 	default:
