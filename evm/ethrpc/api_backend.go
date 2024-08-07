@@ -350,6 +350,10 @@ func (e *EthAPIBackend) SendTx(ctx context.Context, signedTx *types.Transaction)
 		OriginArgs: txArgByte,
 	}
 	byt, err := json.Marshal(txReq)
+
+	logrus.Printf("SendTx, Request=%+v\n", string(byt))
+	logrus.Printf("[OrderCommitment] sendTransaction Request: %v\n", signedTx.Hash().Hex())
+
 	if err != nil {
 		return err
 	}

@@ -2,9 +2,7 @@ package MEVless
 
 import (
 	"encoding/json"
-	"fmt"
 	"github.com/cockroachdb/pebble"
-	"github.com/davecgh/go-spew/spew"
 	"github.com/sirupsen/logrus"
 	"github.com/yu-org/yu/common"
 	"github.com/yu-org/yu/core/context"
@@ -47,8 +45,14 @@ func NewMEVless(cfg *Config) (*MEVless, error) {
 	return tri, nil
 }
 
+func (m *MEVless) CheckTxn(stxn *types.SignedTxn) error {
+	// Just for print log
+	hashStr := strings.TrimPrefix(stxn.GetParams(), Prefix)
+	logrus.Printf("[OrderCommitment] Request Order Hash: %s\n]", hashStr)
+	return nil
+}
+
 func (m *MEVless) OrderTx(ctx *context.WriteContext) error {
-	fmt.Printf("[OrderTx] %s\n]", ctx.Txn.TxnHash.Hex())
 	return nil
 }
 
@@ -79,12 +83,7 @@ func (m *MEVless) PackFor(blockNum common.BlockNum, numLimit uint64, filter func
 func (m *MEVless) OrderCommitment(blockNum common.BlockNum) error {
 	hashTxns, err := m.Pool.PackFor(m.cfg.PackNumber, func(txn *types.SignedTxn) bool {
 		paramStr := txn.GetParams()
-		if !strings.HasPrefix(paramStr, Prefix) {
-			return false
-		}
-		hashStr := strings.TrimPrefix(paramStr, Prefix)
-		hashByt := common.HexToHash(hashStr)
-		return len(hashByt) == common.HashLen
+		return strings.HasPrefix(paramStr, Prefix)
 	})
 	if err != nil {
 		return err
@@ -94,6 +93,9 @@ func (m *MEVless) OrderCommitment(blockNum common.BlockNum) error {
 	}
 
 	sequence := m.makeOrder(hashTxns)
+	for i := 0; i < len(sequence); i++ {
+		logrus.Printf("[OrderCommitment] makeOrder sequence: [%d] %v\n", i, sequence[i].Hex())
+	}
 
 	orderCommitment := &OrderCommitment{
 		BlockNumber: blockNum,
@@ -115,22 +117,24 @@ func (m *MEVless) OrderCommitment(blockNum common.BlockNum) error {
 	m.Pool.Reset(hashTxns)
 
 	m.Pool.SortTxns(func(txs []*types.SignedTxn) []*types.SignedTxn {
-		sorted := make([]*types.SignedTxn, len(sequence))
-		for num, hash := range sequence {
-			txn, err := m.Pool.GetTxn(hash)
-			if err != nil {
-				logrus.Error("MEVless get txn from txpool failed: ", err)
-				continue
-			}
-			if txn != nil {
-				sorted[num] = txn
-				txs = slices.DeleteFunc(txs, func(txn *types.SignedTxn) bool {
-					return txn.TxnHash == hash
-				})
+		sorted := make([]*types.SignedTxn, 0)
+		for i := 0; i < len(sequence); i++ {
+			hash := sequence[i]
+			for _, txn := range txs {
+				if txn.TxnHash == hash {
+					sorted = append(sorted, txn)
+					txs = slices.DeleteFunc(txs, func(txn *types.SignedTxn) bool {
+						return txn.TxnHash == hash
+					})
+					break
+				}
 			}
 		}
-
 		sorted = append(sorted, txs...)
+
+		for num, seq := range sorted {
+			logrus.Printf("[OrderCommitment] expected sequence: [%d] %v\n", num, seq.TxnHash.Hex())
+		}
 
 		return sorted
 	})
@@ -144,9 +148,8 @@ func (m *MEVless) makeOrder(hashTxns []*types.SignedTxn) map[int]common.Hash {
 		return hashTxns[i].GetTips() > hashTxns[j].GetTips()
 	})
 	for i, txn := range hashTxns {
-		spew.Dump(txn)
 		hashStr := strings.TrimPrefix(txn.GetParams(), Prefix)
-		order[i] = common.BytesToHash([]byte(hashStr))
+		order[i] = common.HexToHash(hashStr)
 	}
 	return order
 }
@@ -191,9 +194,11 @@ func (m *MEVless) storeOrderCommitment(oc *OrderCommitment) error {
 }
 
 func (m *MEVless) notifyClient(oc *OrderCommitment) {
-	fmt.Printf("[NotifyClient] %#v\n", oc)
-	if len(m.notifyCh) == notifyBufferLen {
-		_ = <-m.notifyCh
+	//fmt.Printf("[NotifyClient] %#v\n", oc)
+	select {
+	case m.notifyCh <- oc:
+	default:
+		<-m.notifyCh
+		m.notifyCh <- oc
 	}
-	m.notifyCh <- oc
 }

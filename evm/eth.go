@@ -253,6 +253,10 @@ func (s *Solidity) PreHandleTxn(txn *yu_types.SignedTxn) error {
 func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 	txReq := new(TxRequest)
 	err := ctx.BindJson(txReq)
+
+	logrus.Printf("ExecuteTxn: %+v", txReq)
+	logrus.Printf("[OrderCommitment] actual sequence: %v", txReq.Hash.Hex())
+
 	if err != nil {
 		return err
 	}
