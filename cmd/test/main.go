@@ -24,6 +24,8 @@ import (
 const (
 	testWalletPrivateKeyStr = "32e3b56c9f2763d2332e6e4188e4755815ac96441e899de121969845e343c2ff"
 	testWalletAddrStr       = "0x7Bd36074b61Cfe75a53e1B9DF7678C96E6463b02"
+
+	Endpoint = "http://localhost:9092"
 )
 
 var (
@@ -39,11 +41,12 @@ var (
 
 func init() {
 	testPrivateKey, _ = crypto.HexToECDSA(testWalletPrivateKeyStr)
-	client, _ = ethclient.Dial("http://localhost:9092")
+	client, _ = ethclient.Dial(Endpoint)
 }
 
 func main() {
-	TestReceiptForFailedTx()
+	TestGetLog()
+	//TestReceiptForFailedTx()
 	//testTransferEth()
 	//testGetBalance()
 	//testCreateContract()

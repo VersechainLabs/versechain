@@ -293,7 +293,7 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 			return err
 		}
 
-		logrus.Printf("[Execute Txn] Create contract success. Oringin code = %v, Hex Code = %v, Address = %v, Left Gas = %v", code, hex.EncodeToString(code), address.Hex(), leftOverGas)
+		logrus.Printf("[Execute Txn] Create contract success. Address = %v, Left Gas = %v", address.Hex(), leftOverGas)
 		err = saveReceipt(ctx, vmenv, txReq, code, address, leftOverGas, err)
 		if err != nil {
 			return err
@@ -317,7 +317,7 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 			return err
 		}
 
-		logrus.Printf("[Execute Txn] SendTx success. Oringin code = %v, Hex Code = %v, Left Gas = %v", code, hex.EncodeToString(code), leftOverGas)
+		logrus.Printf("[Execute Txn] SendTx success. Hex Code = %v, Left Gas = %v", code, hex.EncodeToString(code), leftOverGas)
 		err = saveReceipt(ctx, vmenv, txReq, code, common.Address{}, leftOverGas, err)
 		if err != nil {
 			return err
