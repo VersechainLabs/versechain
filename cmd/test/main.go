@@ -45,13 +45,13 @@ func init() {
 }
 
 func main() {
-	TestGetLog()
+	// TestGetLog()
 	//TestReceiptForFailedTx()
 	//testTransferEth()
 	//testGetBalance()
 	//testCreateContract()
 	//testMintErc20()
-	//testErc20DeployAndUse()
+	testErc20DeployAndUse()
 }
 
 func testGetBalance() {

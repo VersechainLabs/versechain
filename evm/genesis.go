@@ -512,6 +512,8 @@ func (g *Genesis) Commit(ethState *EthState /*db ethdb.Database, triedb *triedb.
 	rawdb.WriteHeadFastBlockHash(ethState.ethDB, block.Hash())
 	rawdb.WriteHeadHeaderHash(ethState.ethDB, block.Hash())
 	rawdb.WriteChainConfig(ethState.ethDB, block.Hash(), config)
+
+	fmt.Printf("Genesis  Commit block: %v, block.Hash: %v\n", block, block.Hash())
 	return block, nil
 }
 

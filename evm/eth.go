@@ -285,16 +285,16 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 
 		ethstate.Prepare(rules, cfg.Origin, cfg.Coinbase, nil, vm.ActivePrecompiles(rules), nil)
 
-		code, address, leftOverGas, err := vmenv.Create(sender, txReq.Input, txReq.GasLimit, uint256.MustFromBig(txReq.Value))
+		_, address, leftOverGas, err := vmenv.Create(sender, txReq.Input, txReq.GasLimit, uint256.MustFromBig(txReq.Value))
 		if err != nil {
 			byt, _ := json.Marshal(txReq)
 			logrus.Printf("[Execute Txn] Create contract Failed. err = %v. Request = %v", err, string(byt))
-			_ = saveReceipt(ctx, vmenv, txReq, code, address, leftOverGas, err)
+			_ = saveReceipt(ctx, vmenv, txReq, address, leftOverGas, err, s.ethState.stateDB)
 			return err
 		}
 
 		logrus.Printf("[Execute Txn] Create contract success. Address = %v, Left Gas = %v", address.Hex(), leftOverGas)
-		err = saveReceipt(ctx, vmenv, txReq, code, address, leftOverGas, err)
+		err = saveReceipt(ctx, vmenv, txReq, address, leftOverGas, err, s.ethState.stateDB)
 		if err != nil {
 			return err
 		}
@@ -313,12 +313,12 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 		if err != nil {
 			byt, _ := json.Marshal(txReq)
 			logrus.Printf("[Execute Txn] SendTx Failed. err = %v. Request = %v", err, string(byt))
-			_ = saveReceipt(ctx, vmenv, txReq, code, common.Address{}, leftOverGas, err)
+			_ = saveReceipt(ctx, vmenv, txReq, common.Address{}, leftOverGas, err, s.ethState.stateDB)
 			return err
 		}
 
 		logrus.Printf("[Execute Txn] SendTx success. Hex Code = %v, Left Gas = %v", code, hex.EncodeToString(code), leftOverGas)
-		err = saveReceipt(ctx, vmenv, txReq, code, common.Address{}, leftOverGas, err)
+		err = saveReceipt(ctx, vmenv, txReq, common.Address{}, leftOverGas, err, s.ethState.stateDB)
 		if err != nil {
 			return err
 		}
@@ -327,8 +327,8 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 	return nil
 }
 
-func saveReceipt(ctx *context.WriteContext, vmEmv *vm.EVM, txReq *TxRequest, code []byte, contractAddr common.Address, leftOverGas uint64, err error) error {
-	evmReceipt := makeEvmReceipt(ctx, vmEmv, code, ctx.Txn, ctx.Block, contractAddr, leftOverGas, err)
+func saveReceipt(ctx *context.WriteContext, vmEvm *vm.EVM, txReq *TxRequest, contractAddr common.Address, leftOverGas uint64, err error, stateDb *state.StateDB) error {
+	evmReceipt := makeEvmReceipt(vmEvm, ctx.Txn, ctx.Block, contractAddr, leftOverGas, err, stateDb)
 	receiptByt, err := json.Marshal(evmReceipt)
 	if err != nil {
 		txReqByt, _ := json.Marshal(txReq)
@@ -417,7 +417,7 @@ func AdaptHash(ethHash common.Hash) yu_common.Hash {
 	return yuHash
 }
 
-func makeEvmReceipt(ctx *context.WriteContext, vmEvm *vm.EVM, code []byte, signedTx *yu_types.SignedTxn, block *yu_types.Block, address common.Address, leftOverGas uint64, err error) *types.Receipt {
+func makeEvmReceipt(vmEvm *vm.EVM, signedTx *yu_types.SignedTxn, block *yu_types.Block, address common.Address, leftOverGas uint64, err error, stateDb *state.StateDB) *types.Receipt {
 	wrCallParams := signedTx.Raw.WrCall.Params
 	var txReq = &TxRequest{}
 	_ = json.Unmarshal([]byte(wrCallParams), txReq)
@@ -426,7 +426,6 @@ func makeEvmReceipt(ctx *context.WriteContext, vmEvm *vm.EVM, code []byte, signe
 	_ = json.Unmarshal(txReq.OriginArgs, txArgs)
 	originTx := txArgs.ToTransaction(txReq.V, txReq.R, txReq.S)
 
-	stateDb := vmEvm.StateDB.(*state.StateDB)
 	usedGas := originTx.Gas() - leftOverGas
 
 	blockNumber := big.NewInt(int64(block.Height))
@@ -462,12 +461,16 @@ func makeEvmReceipt(ctx *context.WriteContext, vmEvm *vm.EVM, code []byte, signe
 		receipt.BlobGasPrice = vmEvm.Context.BlobBaseFee
 	}
 
-	receipt.Logs = stateDb.GetLogs(txHash, blockNumber.Uint64(), common.Hash(block.Hash))
+	receipt.Logs = stateDb.GetLogs(txHash, uint64(block.Height), common.Hash(block.Hash))
 	receipt.Bloom = types.CreateBloom(types.Receipts{})
 	receipt.BlockHash = common.Hash(block.Hash)
 	receipt.BlockNumber = blockNumber
 	receipt.TransactionIndex = uint(stateDb.TxIndex())
 
+	logrus.Printf("[Receipt] uint64(block.Height) = %v", uint64(block.Height))
+	logrus.Printf("[Receipt] txHash = %v", txHash)
+	logrus.Printf("[Receipt] common.Hash(block.Hash) = %v", common.Hash(block.Hash))
+	logrus.Printf("[Receipt] block.Hash = %v", block.Hash)
 	logrus.Printf("[Receipt] log = %v", receipt.Logs)
 	logrus.Printf("[Receipt] log = %v", stateDb.Logs())
 	logrus.Printf("[Receipt] log is nil = %v", receipt.Logs == nil)
