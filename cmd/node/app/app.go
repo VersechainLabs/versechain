@@ -36,14 +36,18 @@ func StartUpChain(poaCfg *poa.PoaConfig, crCfg *config.Config, evmCfg *evm.GethC
 }
 
 func InitItachi(poaCfg *poa.PoaConfig, crCfg *config.Config, evmCfg *evm.GethConfig, mevLessPoaCfg *mev_less_poa.PoaConfig, mevLessCfg *mev_less.Config) *kernel.Kernel {
-	poaTri := poa.NewPoa(poaCfg)
+	// poaTri := poa.NewPoa(poaCfg)
 	cairoTri := cairo.NewCairo(crCfg)
 	solidityTri := evm.NewSolidity(evmCfg)
 	mevLessPoaTri := mev_less_poa.NewPoa(mevLessPoaCfg)
-	mevLessTri := mev_less.NewMEVless(mevLessCfg)
+	mevLessTri, err := mev_less.NewMEVless(mevLessCfg)
+
+	if err != nil {
+		return nil
+	}
 
 	chain := startup.InitDefaultKernel(
-		poaTri, mevLessPoaTri, mevLessTri, cairoTri, solidityTri,
+		mevLessPoaTri, mevLessTri, cairoTri, solidityTri,
 	)
 	return chain
 }
