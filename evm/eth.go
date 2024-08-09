@@ -12,6 +12,7 @@ import (
 	"itachi/evm/config"
 	"math/big"
 	"net/http"
+	"fmt"
 
 	"github.com/sirupsen/logrus"
 	yu_common "github.com/yu-org/yu/common"
@@ -305,6 +306,7 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 		var evmReceipt types.Receipt
 		if leftOverGas > 0 {
 			evmReceipt = makeEvmReceipt(code, ctx.Txn, ctx.Block, address, leftOverGas)
+			fmt.Printf("Return evmReceipt value: %+v\n", evmReceipt)
 		}
 
 		receiptByt, err := json.Marshal(evmReceipt)
@@ -336,6 +338,7 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 		var evmReceipt types.Receipt
 		if leftOverGas > 0 {
 			evmReceipt = makeEvmReceipt(ret, ctx.Txn, ctx.Block, common.Address{}, leftOverGas)
+			fmt.Printf("Return evmReceipt value: %+v\n", evmReceipt)
 		}
 
 		receiptByt, err := json.Marshal(evmReceipt)

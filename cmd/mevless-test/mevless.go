@@ -80,6 +80,7 @@ func mevlessTest() {
 			})
 
 			fmt.Printf("mevless request mevless_params %s\n", mevless_params)
+			fmt.Printf("mevless request requestBody %s\n", requestBody)
 			resp, err := http.Post(mevlessHttpAddr, "application/json", bytes.NewBuffer(requestBody))
 			defer resp.Body.Close()
 
