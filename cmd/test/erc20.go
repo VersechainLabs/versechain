@@ -86,5 +86,7 @@ func mintErc20(contractAddr common.Address) {
 	txHash := *ParseResponse[string](response)
 	log.Printf("ming erc20 txHash: %s", txHash)
 	receiptChan := waitForReceipt(txHash)
-	_ = <-receiptChan
+	receipt := <-receiptChan
+
+	log.Printf("Log: %v", receipt.Logs)
 }
