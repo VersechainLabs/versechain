@@ -119,7 +119,7 @@ func (m *MEVless) OrderCommitment(blockNum common.BlockNum) error {
 	// TODO: sync the OrderCommitment to other P2P nodes
 
 	// sleep for a while so that clients can send their tx-content onchain.
-	time.Sleep(800 * time.Millisecond)
+	time.Sleep(5000 * time.Millisecond)
 
 	m.Pool.Reset(hashTxns)
 

@@ -68,14 +68,18 @@ func mevlessTest() {
 			})
 			rawTx, signedTx := SignTransaction(gethCfg, testWalletPrivateKeyStr, tx)
 
+			mevless_params := fmt.Sprintf("%s%s", MEVless.Prefix, signedTx.Hash().Hex())
+
 			// 3. Send Order Request
 			requestBody, err := json.Marshal(map[string]interface{}{
 				"call": map[string]string{
 					"tripod_name": "mevless",
 					"func_name":   "OrderTx",
-					"params":      fmt.Sprintf("%s%s", MEVless.Prefix, signedTx.Hash().Hex()),
+					"params":      mevless_params,
 				},
 			})
+
+			fmt.Printf("mevless request mevless_params %s\n", mevless_params)
 			resp, err := http.Post(mevlessHttpAddr, "application/json", bytes.NewBuffer(requestBody))
 			defer resp.Body.Close()
 
