@@ -167,6 +167,7 @@ func (m *MEVless) VerifyBlock(block *types.Block) error {
 	return nil
 }
 
+// Charge for paying for advance to prevent DOS attacks.
 func (m *MEVless) Charge() uint64 {
 	return m.cfg.Charge
 }
