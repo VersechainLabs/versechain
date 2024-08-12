@@ -12,8 +12,8 @@ import (
 	"github.com/NethermindEth/starknet.go/hash"
 	sdk "github.com/NethermindEth/starknet.go/rpc"
 	"github.com/yu-org/yu/common"
-	yucore "github.com/yu-org/yu/core"
 	yucontext "github.com/yu-org/yu/core/context"
+	"github.com/yu-org/yu/core/protocol"
 	"itachi/cairo"
 )
 
@@ -71,7 +71,7 @@ func (s *StarknetRPC) addTransaction(tx rpc.BroadcastedTransaction, legacyTraceJ
 	if err != nil {
 		return nil, jsonrpc.Err(jsonrpc.InvalidJSON, err.Error())
 	}
-	signedWrCall := &yucore.SignedWrCall{
+	signedWrCall := &protocol.SignedWrCall{
 		Call: &common.WrCall{
 			TripodName: CairoTripod,
 			FuncName:   "ExecuteTxn",

@@ -65,25 +65,35 @@ func newEVM(cfg *GethConfig) *vm.EVM {
 
 type GethConfig struct {
 	ChainConfig *params.ChainConfig
-	Difficulty  *big.Int
-	Origin      common.Address
+
+	// BlockContext provides the EVM with auxiliary information. Once provided
+	// it shouldn't be modified.
+	GetHashFn   func(n uint64) common.Hash
 	Coinbase    common.Address
+	GasLimit    uint64
 	BlockNumber *big.Int
 	Time        uint64
-	GasLimit    uint64
-	GasPrice    *big.Int
-	Value       *big.Int
-	Debug       bool
-	EVMConfig   vm.Config
+	Difficulty  *big.Int
 	BaseFee     *big.Int
 	BlobBaseFee *big.Int
-	BlobHashes  []common.Hash
-	BlobFeeCap  *big.Int
 	Random      *common.Hash
 
-	State     *state.StateDB
-	GetHashFn func(n uint64) common.Hash
+	// TxContext provides the EVM with information about a transaction.
+	// All fields can change between transactions.
+	Origin     common.Address
+	GasPrice   *big.Int
+	BlobHashes []common.Hash
+	BlobFeeCap *big.Int
 
+	// StateDB gives access to the underlying state
+	State *state.StateDB
+
+	// Unknown
+	Value     *big.Int
+	Debug     bool
+	EVMConfig vm.Config
+
+	// Global config
 	EnableEthRPC bool   `toml:"enable_eth_rpc"`
 	EthHost      string `toml:"eth_host"`
 	EthPort      string `toml:"eth_port"`
@@ -228,6 +238,21 @@ func NewSolidity(gethConfig *GethConfig) *Solidity {
 
 // region ---- Tripod Api ----
 
+func (s *Solidity) StartBlock(block *yu_types.Block) {
+	s.cfg.BlockNumber = big.NewInt(int64(block.Height))
+	//s.cfg.GasLimit =
+	s.cfg.Time = block.Timestamp
+	s.cfg.Difficulty = big.NewInt(int64(block.Difficulty))
+}
+
+func (s *Solidity) EndBlock(block *yu_types.Block) {
+	// nothing
+}
+
+func (s *Solidity) FinalizeBlock(block *yu_types.Block) {
+	// nothing
+}
+
 func (s *Solidity) PreHandleTxn(txn *yu_types.SignedTxn) error {
 	var txReq TxRequest
 	param := txn.GetParams()
@@ -271,9 +296,9 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 	cfg.Value = value
 
 	vmenv := newEVM(cfg)
+	s.ethState.setTxContext(common.Hash(ctx.GetTxnHash()), ctx.TxnIndex)
 	vmenv.StateDB = s.ethState.stateDB
-	vmenv.Context.BlockNumber = big.NewInt(int64(ctx.Block.Height))
-	s.cfg.BlockNumber = big.NewInt(int64(ctx.Block.Height))
+	logrus.Printf("[StateDB] %v", s.ethState.stateDB == s.cfg.State)
 
 	sender := vm.AccountRef(txReq.Origin)
 	rules := cfg.ChainConfig.Rules(vmenv.Context.BlockNumber, vmenv.Context.Random != nil, vmenv.Context.Time)
@@ -285,16 +310,16 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 
 		ethstate.Prepare(rules, cfg.Origin, cfg.Coinbase, nil, vm.ActivePrecompiles(rules), nil)
 
-		code, address, leftOverGas, err := vmenv.Create(sender, txReq.Input, txReq.GasLimit, uint256.MustFromBig(txReq.Value))
+		_, address, leftOverGas, err := vmenv.Create(sender, txReq.Input, txReq.GasLimit, uint256.MustFromBig(txReq.Value))
 		if err != nil {
 			byt, _ := json.Marshal(txReq)
 			logrus.Printf("[Execute Txn] Create contract Failed. err = %v. Request = %v", err, string(byt))
-			_ = saveReceipt(ctx, vmenv, txReq, code, address, leftOverGas, err)
+			_ = saveReceipt(ctx, vmenv, txReq, address, leftOverGas, err)
 			return err
 		}
 
 		logrus.Printf("[Execute Txn] Create contract success. Address = %v, Left Gas = %v", address.Hex(), leftOverGas)
-		err = saveReceipt(ctx, vmenv, txReq, code, address, leftOverGas, err)
+		err = saveReceipt(ctx, vmenv, txReq, address, leftOverGas, err)
 		if err != nil {
 			return err
 		}
@@ -313,12 +338,12 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 		if err != nil {
 			byt, _ := json.Marshal(txReq)
 			logrus.Printf("[Execute Txn] SendTx Failed. err = %v. Request = %v", err, string(byt))
-			_ = saveReceipt(ctx, vmenv, txReq, code, common.Address{}, leftOverGas, err)
+			_ = saveReceipt(ctx, vmenv, txReq, common.Address{}, leftOverGas, err)
 			return err
 		}
 
-		logrus.Printf("[Execute Txn] SendTx success. Hex Code = %v, Left Gas = %v", code, hex.EncodeToString(code), leftOverGas)
-		err = saveReceipt(ctx, vmenv, txReq, code, common.Address{}, leftOverGas, err)
+		logrus.Printf("[Execute Txn] SendTx success. Hex Code = %v, Left Gas = %v", hex.EncodeToString(code), leftOverGas)
+		err = saveReceipt(ctx, vmenv, txReq, common.Address{}, leftOverGas, err)
 		if err != nil {
 			return err
 		}
@@ -327,8 +352,8 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 	return nil
 }
 
-func saveReceipt(ctx *context.WriteContext, vmEmv *vm.EVM, txReq *TxRequest, code []byte, contractAddr common.Address, leftOverGas uint64, err error) error {
-	evmReceipt := makeEvmReceipt(ctx, vmEmv, code, ctx.Txn, ctx.Block, contractAddr, leftOverGas, err)
+func saveReceipt(ctx *context.WriteContext, vmEvm *vm.EVM, txReq *TxRequest, contractAddr common.Address, leftOverGas uint64, err error) error {
+	evmReceipt := makeEvmReceipt(vmEvm, ctx.Txn, ctx.Block, contractAddr, leftOverGas, err)
 	receiptByt, err := json.Marshal(evmReceipt)
 	if err != nil {
 		txReqByt, _ := json.Marshal(txReq)
@@ -369,6 +394,7 @@ func (s *Solidity) Call(ctx *context.ReadContext) {
 		rules    = cfg.ChainConfig.Rules(vmenv.Context.BlockNumber, vmenv.Context.Random != nil, vmenv.Context.Time)
 	)
 
+	logrus.Printf("[StateDB] %v", s.ethState.stateDB == s.cfg.State)
 	vmenv.StateDB = s.ethState.stateDB
 
 	if cfg.EVMConfig.Tracer != nil && cfg.EVMConfig.Tracer.OnTxStart != nil {
@@ -417,7 +443,7 @@ func AdaptHash(ethHash common.Hash) yu_common.Hash {
 	return yuHash
 }
 
-func makeEvmReceipt(ctx *context.WriteContext, vmEvm *vm.EVM, code []byte, signedTx *yu_types.SignedTxn, block *yu_types.Block, address common.Address, leftOverGas uint64, err error) *types.Receipt {
+func makeEvmReceipt(vmEvm *vm.EVM, signedTx *yu_types.SignedTxn, block *yu_types.Block, address common.Address, leftOverGas uint64, err error) *types.Receipt {
 	wrCallParams := signedTx.Raw.WrCall.Params
 	var txReq = &TxRequest{}
 	_ = json.Unmarshal([]byte(wrCallParams), txReq)
@@ -426,7 +452,6 @@ func makeEvmReceipt(ctx *context.WriteContext, vmEvm *vm.EVM, code []byte, signe
 	_ = json.Unmarshal(txReq.OriginArgs, txArgs)
 	originTx := txArgs.ToTransaction(txReq.V, txReq.R, txReq.S)
 
-	stateDb := vmEvm.StateDB.(*state.StateDB)
 	usedGas := originTx.Gas() - leftOverGas
 
 	blockNumber := big.NewInt(int64(block.Height))
@@ -438,10 +463,11 @@ func makeEvmReceipt(ctx *context.WriteContext, vmEvm *vm.EVM, code []byte, signe
 		status = types.ReceiptStatusSuccessful
 	}
 	var root []byte
+	stateDB := vmEvm.StateDB.(*state.StateDB)
 	if vmEvm.ChainConfig().IsByzantium(blockNumber) {
-		stateDb.Finalise(true)
+		stateDB.Finalise(true)
 	} else {
-		root = stateDb.IntermediateRoot(vmEvm.ChainConfig().IsEIP158(blockNumber)).Bytes()
+		root = stateDB.IntermediateRoot(vmEvm.ChainConfig().IsEIP158(blockNumber)).Bytes()
 	}
 
 	// TODO: 1. root is nil; 2. CumulativeGasUsed not; 3. Log is empty; 4. logBloom is empty
@@ -462,15 +488,19 @@ func makeEvmReceipt(ctx *context.WriteContext, vmEvm *vm.EVM, code []byte, signe
 		receipt.BlobGasPrice = vmEvm.Context.BlobBaseFee
 	}
 
-	receipt.Logs = stateDb.GetLogs(txHash, blockNumber.Uint64(), common.Hash(block.Hash))
+	receipt.Logs = stateDB.GetLogs(txHash, uint64(block.Height), common.Hash(block.Hash))
 	receipt.Bloom = types.CreateBloom(types.Receipts{})
 	receipt.BlockHash = common.Hash(block.Hash)
 	receipt.BlockNumber = blockNumber
-	receipt.TransactionIndex = uint(stateDb.TxIndex())
+	receipt.TransactionIndex = uint(stateDB.TxIndex())
 
+	logrus.Printf("[Receipt] uint64(block.Height) = %v", uint64(block.Height))
+	logrus.Printf("[Receipt] txHash = %v", txHash)
+	logrus.Printf("[Receipt] common.Hash(block.Hash) = %v", common.Hash(block.Hash))
+	logrus.Printf("[Receipt] block.Hash = %v", block.Hash)
 	logrus.Printf("[Receipt] log = %v", receipt.Logs)
-	logrus.Printf("[Receipt] log = %v", stateDb.Logs())
-	logrus.Printf("[Receipt] log is nil = %v", receipt.Logs == nil)
+	//spew.Dump("[Receipt] log = %v", stateDB.Logs())
+	//logrus.Printf("[Receipt] log is nil = %v", receipt.Logs == nil)
 	if receipt.Logs == nil {
 		receipt.Logs = []*types.Log{}
 	}
@@ -480,7 +510,7 @@ func makeEvmReceipt(ctx *context.WriteContext, vmEvm *vm.EVM, code []byte, signe
 			receipt.TransactionIndex = uint(idx)
 		}
 	}
-	logrus.Printf("[Receipt] statedb txIndex = %v, actual txIndex = %v", stateDb.TxIndex(), receipt.TransactionIndex)
+	logrus.Printf("[Receipt] statedb txIndex = %v, actual txIndex = %v", stateDB.TxIndex(), receipt.TransactionIndex)
 
 	return receipt
 }

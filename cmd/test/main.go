@@ -45,7 +45,7 @@ func init() {
 }
 
 func main() {
-	//TestGetLog()
+	// TestGetLog()
 	//TestReceiptForFailedTx()
 	//testTransferEth()
 	//testGetBalance()
