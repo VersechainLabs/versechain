@@ -6,13 +6,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/BurntSushi/toml"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/yu-org/yu/common/yerror"
 	"itachi/evm/config"
 	"math/big"
 	"net/http"
-	"fmt"
 
 	"github.com/sirupsen/logrus"
 	yu_common "github.com/yu-org/yu/common"
@@ -306,7 +306,6 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 		var evmReceipt types.Receipt
 		if leftOverGas > 0 {
 			evmReceipt = makeEvmReceipt(code, ctx.Txn, ctx.Block, address, leftOverGas)
-			fmt.Printf("Return evmReceipt value: %+v\n", evmReceipt)
 		}
 
 		receiptByt, err := json.Marshal(evmReceipt)
