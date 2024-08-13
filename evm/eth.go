@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"github.com/BurntSushi/toml"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/yu-org/yu/common/yerror"
@@ -337,7 +336,7 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 		var evmReceipt types.Receipt
 		if leftOverGas > 0 {
 			evmReceipt = makeEvmReceipt(ret, ctx.Txn, ctx.Block, common.Address{}, leftOverGas)
-			fmt.Printf("Return evmReceipt value: %+v\n", evmReceipt)
+			// fmt.Printf("Return evmReceipt value: %+v\n", evmReceipt)
 		}
 
 		receiptByt, err := json.Marshal(evmReceipt)

@@ -177,6 +177,14 @@ type OrderCommitment struct {
 	Sequences   map[int]common.Hash `json:"sequences"`
 }
 
+func (oc *OrderCommitment) String() string {
+	var seqStr string
+	for order, txHash := range oc.Sequences {
+		seqStr = fmt.Sprintf("%s %d: %s\n", seqStr, order, txHash.String())
+	}
+	return fmt.Sprintf("BlockNumber: %d\n%s\n", oc.BlockNumber, seqStr)
+}
+
 type TxOrder struct {
 	BlockNumber common.BlockNum `json:"block_number"`
 	Sequence    int             `json:"sequence"`
@@ -202,7 +210,7 @@ func (m *MEVless) storeOrderCommitment(oc *OrderCommitment) error {
 }
 
 func (m *MEVless) notifyClient(oc *OrderCommitment) {
-	fmt.Printf("[NotifyClient] %#v\n", oc)
+	fmt.Printf("[NotifyClient Order Commitment] %s\n", oc)
 	select {
 	case m.notifyCh <- oc:
 	default:

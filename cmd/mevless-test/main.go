@@ -14,7 +14,7 @@ const (
 
 var (
 	rpcId          = 0
-	gethCfg        = evm.LoadEvmConfig("../../conf/evm_cfg.toml")
+	gethCfg        = evm.LoadEvmConfig("./conf/evm_cfg.toml")
 	testWalletAddr = common.HexToAddress(testWalletAddrStr)
 
 	ether = new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil)
