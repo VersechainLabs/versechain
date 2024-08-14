@@ -69,7 +69,7 @@ type GethConfig struct {
 	// BlockContext provides the EVM with auxiliary information. Once provided
 	// it shouldn't be modified.
 	GetHashFn   func(n uint64) common.Hash
-	Coinbase    common.Address
+	Coinbase    common.Address `toml:"coinbase"`
 	GasLimit    uint64
 	BlockNumber *big.Int
 	Time        uint64
@@ -105,7 +105,7 @@ func SetDefaultGethConfig() *GethConfig {
 		ChainConfig: params.AllEthashProtocolChanges,
 		Difficulty:  big.NewInt(1),
 		Origin:      common.HexToAddress("0x0"),
-		Coinbase:    common.HexToAddress("0x0"),
+		Coinbase:    common.HexToAddress("0x7Bd36074b61Cfe75a53e1B9DF7678C96E6463b02"),
 		BlockNumber: big.NewInt(0),
 		Time:        0,
 		GasLimit:    8000000,
