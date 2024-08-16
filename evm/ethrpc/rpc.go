@@ -3,6 +3,7 @@ package ethrpc
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/rs/cors"
@@ -105,8 +106,12 @@ func logRequestResponse(next http.Handler) http.Handler {
 
 		rec := &responseRecorder{ResponseWriter: w, body: &bytes.Buffer{}}
 		next.ServeHTTP(rec, r)
-		logrus.Printf("[API] Request:  %s", string(bodyBytes))
-		logrus.Printf("[API] Response: %s", rec.body.String())
+
+		parsedRequest := make(map[string]interface{})
+		_ = json.Unmarshal(bodyBytes, &parsedRequest)
+		method := parsedRequest["method"]
+		logrus.Infof("[API] [%v] Request:  %s", method, string(bodyBytes))
+		logrus.Infof("[API] [%v] Response: %s", method, rec.body.String())
 	})
 }
 

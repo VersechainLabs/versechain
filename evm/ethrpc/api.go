@@ -3,6 +3,7 @@ package ethrpc
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/sirupsen/logrus"
@@ -1317,6 +1318,10 @@ func (s *TransactionAPI) SendRawTransaction(ctx context.Context, input hexutil.B
 	if err := tx.UnmarshalBinary(input); err != nil {
 		return common.Hash{}, err
 	}
+
+	byt, _ := json.Marshal(tx)
+	logrus.Infof("[SendRawTransaction] Tx = %v , Raw = %x", string(byt), hexutil.Encode(input))
+
 	return SubmitTransaction(ctx, s.b, tx)
 }
 
