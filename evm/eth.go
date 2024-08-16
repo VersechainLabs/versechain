@@ -357,7 +357,7 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 		gasUsed := gasLimit - leftOverGas
 		gasfee := new(big.Int).Mul(new(big.Int).SetUint64(gasUsed), gasPrice)
 		ethstate.Transfer(sender.Address(), cfg.Coinbase, ConvertBigIntToUint256(gasfee))
-		logrus.Printf("[Execute Txn] Create contract success. cfg.Coinbase = %v, gasfee = %v", cfg.Coinbase, gasfee)
+		logrus.Printf("[Execute Txn] SendTx success. cfg.Coinbase = %v, gasfee = %v", cfg.Coinbase, gasfee)
 	}
 
 	return nil
