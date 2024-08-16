@@ -323,6 +323,12 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 		if err != nil {
 			return err
 		}
+
+		gasUsed := gasLimit - leftOverGas
+		gasfee := new(big.Int).Mul(new(big.Int).SetUint64(gasUsed), gasPrice)
+		ethstate.Transfer(sender.Address(), cfg.Coinbase, ConvertBigIntToUint256(gasfee))
+		logrus.Printf("[Execute Txn] Create contract success. cfg.Coinbase = %v, gasfee = %v", cfg.Coinbase, gasfee)
+
 	} else {
 		if cfg.EVMConfig.Tracer != nil && cfg.EVMConfig.Tracer.OnTxStart != nil {
 			cfg.EVMConfig.Tracer.OnTxStart(vmenv.GetVMContext(), types.NewTx(&types.LegacyTx{To: txReq.Address, Data: txReq.Input, Value: txReq.Value, Gas: txReq.GasLimit}), txReq.Origin)
@@ -347,6 +353,11 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 		if err != nil {
 			return err
 		}
+
+		gasUsed := gasLimit - leftOverGas
+		gasfee := new(big.Int).Mul(new(big.Int).SetUint64(gasUsed), gasPrice)
+		ethstate.Transfer(sender.Address(), cfg.Coinbase, ConvertBigIntToUint256(gasfee))
+		logrus.Printf("[Execute Txn] Create contract success. cfg.Coinbase = %v, gasfee = %v", cfg.Coinbase, gasfee)
 	}
 
 	return nil
