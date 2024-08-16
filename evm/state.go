@@ -211,3 +211,7 @@ func (s *EthState) Transfer(sender common.Address, recipient common.Address, amo
 	s.stateDB.SubBalance(sender, amount, tracing.BalanceChangeTransfer)
 	s.stateDB.AddBalance(recipient, amount, tracing.BalanceChangeTransfer)
 }
+
+func (s *EthState) CanTransfer(addr common.Address, amount *uint256.Int) bool {
+	return s.stateDB.GetBalance(addr).Cmp(amount) >= 0
+}
