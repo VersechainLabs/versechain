@@ -106,7 +106,7 @@ func SetDefaultGethConfig() *GethConfig {
 		ChainConfig: params.AllEthashProtocolChanges,
 		Difficulty:  big.NewInt(1),
 		Origin:      common.HexToAddress("0x0"),
-		Coinbase:    common.HexToAddress("0x7Bd36074b61Cfe75a53e1B9DF7678C96E6463b02"),
+		Coinbase:    common.HexToAddress("0xbaeFe32bc1636a90425AcBCC8cfAD1b0507eCdE1"),
 		BlockNumber: big.NewInt(0),
 		Time:        0,
 		GasLimit:    8000000,
@@ -397,6 +397,7 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 
 		gasUsed := gasLimit - leftOverGas
 		gasfee := new(big.Int).Mul(new(big.Int).SetUint64(gasUsed), gasPrice)
+		logrus.Printf("[Execute Txn] gasfee = %v, gasUsed = %v,gasPrice = %v", gasfee, gasUsed, gasPrice)
 		cTransfer := ethstate.CanTransfer(sender.Address(), ConvertBigIntToUint256(gasfee))
 		if !cTransfer {
 			logrus.Printf("[Execute Txn] Insufficient Balance.sender balance : %v,", ethstate.stateDB.GetBalance(sender.Address()))
@@ -431,7 +432,9 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 		}
 
 		gasUsed := gasLimit - leftOverGas
+		logrus.Printf("[Execute Txn] gasLimit = %v, leftOverGas = %v", gasLimit, leftOverGas)
 		gasfee := new(big.Int).Mul(new(big.Int).SetUint64(gasUsed), gasPrice)
+		logrus.Printf("[Execute Txn] gasfee = %v, gasUsed = %v,gasPrice = %v", gasfee, gasUsed, gasPrice)
 		cTransfer := ethstate.CanTransfer(sender.Address(), ConvertBigIntToUint256(gasfee))
 		if !cTransfer {
 			logrus.Printf("[Execute Txn] Insufficient Balance.sender balance : %v,", ethstate.stateDB.GetBalance(sender.Address()))
