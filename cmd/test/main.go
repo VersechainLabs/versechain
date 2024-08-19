@@ -51,7 +51,10 @@ func main() {
 	//testGetBalance()
 	//testCreateContract()
 	//testMintErc20()
-	testErc20DeployAndUse()
+	//testErc20DeployAndUse()
+
+	contractAddr := common.HexToAddress("0x310b8685e3e69cb05b251a12f5ffab23001cda42")
+	mintErc20(contractAddr)
 }
 
 func testGetBalance() {
