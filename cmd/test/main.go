@@ -59,8 +59,8 @@ func main() {
 }
 
 func testGetBalance() {
-	checkBalanceParam := []interface{}{testWalletAddrStr, "latest"}
-	// checkBalanceParam := []interface{}{coinbaseWalletAddrStr, "latest"}
+	// checkBalanceParam := []interface{}{testWalletAddrStr, "latest"}
+	checkBalanceParam := []interface{}{coinbaseWalletAddrStr, "latest"}
 	checkBalanceBody := GenerateRequestBody("eth_getBalance", checkBalanceParam...)
 	log.Println(checkBalanceBody)
 	response := SendRequest(checkBalanceBody)

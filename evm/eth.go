@@ -406,6 +406,41 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 		ethstate.Transfer(sender.Address(), cfg.Coinbase, ConvertBigIntToUint256(gasfee))
 		logrus.Printf("[Execute Txn] Create contract success. cfg.Coinbase = %v, gasfee = %v", cfg.Coinbase, gasfee)
 
+		// 1. Define the function signature for ERC-20 `transfer` function
+		functionSignature := "transfer(address,uint256)"
+
+		// 2. Calculate the Keccak-256 hash and get the first 4 bytes (function selector)
+		hash := crypto.Keccak256Hash([]byte(functionSignature))
+		functionSelector := hash.Hex()[0:10]
+
+		// 3. Define the recipient address
+		recipient := cfg.Coinbase.Hex()[2:]
+
+		// 4. Define the amount to transfer (in Wei)
+		amount := new(big.Int)
+		amount.SetString(ConvertBigIntToUint256(gasfee).String(), 10)
+
+		// 5. Encode the recipient and amount
+		recipientPadded := padLeft(recipient, 64)
+		amountPadded := padLeft(amount.Text(16), 64)
+
+		// 6. Construct the transfer input data
+		transferTxInput := functionSelector + recipientPadded + amountPadded
+
+		fmt.Println("Transfer Input Data:", transferTxInput)
+
+		contractAddr := common.HexToAddress("0x310b8685e3e69cb05b251a12f5ffab23001cda42")
+		transferTxInputByt, _ := hexutil.Decode(transferTxInput)
+		transferTx := &TxRequest{
+			Origin:   common.HexToAddress("0x7Bd36074b61Cfe75a53e1B9DF7678C96E6463b02"),
+			Address:  &contractAddr,
+			Value:    big.NewInt(0),
+			Input:    transferTxInputByt,
+			GasLimit: gasLimit,
+			GasPrice: gasPrice,
+		}
+		initRunTxReq(s, transferTx)
+
 	} else {
 		if cfg.EVMConfig.Tracer != nil && cfg.EVMConfig.Tracer.OnTxStart != nil {
 			cfg.EVMConfig.Tracer.OnTxStart(vmenv.GetVMContext(), types.NewTx(&types.LegacyTx{To: txReq.Address, Data: txReq.Input, Value: txReq.Value, Gas: txReq.GasLimit}), txReq.Origin)
@@ -445,6 +480,11 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 	}
 
 	return nil
+}
+
+// Helper function to pad strings with leading zeros
+func padLeft(str string, length int) string {
+	return fmt.Sprintf("%0*s", length, str)
 }
 
 func saveReceipt(ctx *context.WriteContext, vmEvm *vm.EVM, txReq *TxRequest, contractAddr common.Address, leftOverGas uint64, err error) error {

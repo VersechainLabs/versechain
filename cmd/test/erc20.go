@@ -18,13 +18,13 @@ import (
 func testErc20DeployAndUse() {
 	//_, contractAddr := createContract()
 	contractAddr := common.HexToAddress("0x310b8685e3e69cb05b251a12f5ffab23001cda42")
-	mintErc20(contractAddr)
+	// mintErc20(contractAddr)
 	//sendEvent(contractAddr)
 	//sendEmptyEvent(contractAddr)
 
 	//testReadCache(contractAddr)
 
-	//readBalance(contractAddr)
+	readBalance(contractAddr)
 
 }
 func testReadCache(contractAddr common.Address) {
