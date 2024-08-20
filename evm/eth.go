@@ -406,39 +406,7 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 		ethstate.Transfer(sender.Address(), cfg.Coinbase, ConvertBigIntToUint256(gasfee))
 		logrus.Printf("[Execute Txn] Create contract success. cfg.Coinbase = %v, gasfee = %v", cfg.Coinbase, gasfee)
 
-		// 1. Define the function signature for ERC-20 `transfer` function
-		functionSignature := "transfer(address,uint256)"
-
-		// 2. Calculate the Keccak-256 hash and get the first 4 bytes (function selector)
-		hash := crypto.Keccak256Hash([]byte(functionSignature))
-		functionSelector := hash.Hex()[0:10]
-
-		// 3. Define the recipient address
-		recipient := cfg.Coinbase.Hex()[2:]
-
-		// 4. Define the amount to transfer (in Wei)
-		amount := new(big.Int)
-		amount.SetString(ConvertBigIntToUint256(gasfee).String(), 10)
-
-		// 5. Encode the recipient and amount
-		recipientPadded := padLeft(recipient, 64)
-		amountPadded := padLeft(amount.Text(16), 64)
-
-		// 6. Construct the transfer input data
-		transferTxInput := functionSelector + recipientPadded + amountPadded
-
-		fmt.Println("Transfer Input Data:", transferTxInput)
-
-		contractAddr := common.HexToAddress("0x310b8685e3e69cb05b251a12f5ffab23001cda42")
-		transferTxInputByt, _ := hexutil.Decode(transferTxInput)
-		transferTx := &TxRequest{
-			Origin:   common.HexToAddress("0x7Bd36074b61Cfe75a53e1B9DF7678C96E6463b02"),
-			Address:  &contractAddr,
-			Value:    big.NewInt(0),
-			Input:    transferTxInputByt,
-			GasLimit: gasLimit,
-			GasPrice: gasPrice,
-		}
+		transferTx := constructTransferTxInput(cfg, gasLimit, gasPrice, gasfee)
 		initRunTxReq(s, transferTx)
 
 	} else {
@@ -477,9 +445,51 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 		}
 		ethstate.Transfer(sender.Address(), cfg.Coinbase, ConvertBigIntToUint256(gasfee))
 		logrus.Printf("[Execute Txn] SendTx success. cfg.Coinbase = %v, gasfee = %v", cfg.Coinbase, gasfee)
+
+		transferTx := constructTransferTxInput(cfg, gasLimit, gasPrice, gasfee)
+		initRunTxReq(s, transferTx)
 	}
 
 	return nil
+}
+
+// Function to construct the ERC-20 transfer transaction input data
+func constructTransferTxInput(cfg *GethConfig, gasLimit uint64, gasPrice *big.Int, gasfee *big.Int) *TxRequest {
+	// 1. Define the function signature for ERC-20 `transfer` function
+	functionSignature := "transfer(address,uint256)"
+
+	// 2. Calculate the Keccak-256 hash and get the first 4 bytes (function selector)
+	hash := crypto.Keccak256Hash([]byte(functionSignature))
+	functionSelector := hash.Hex()[0:10]
+
+	// 3. Define the recipient address
+	recipient := cfg.Coinbase.Hex()[2:]
+
+	// 4. Define the amount to transfer (in Wei)
+	amount := new(big.Int)
+	amount.SetString(ConvertBigIntToUint256(gasfee).String(), 10)
+
+	// 5. Encode the recipient and amount
+	recipientPadded := padLeft(recipient, 64)
+	amountPadded := padLeft(amount.Text(16), 64)
+
+	// 6. Construct the transfer input data
+	transferTxInput := functionSelector + recipientPadded + amountPadded
+
+	fmt.Println("Transfer Input Data:", transferTxInput)
+
+	contractAddr := common.HexToAddress("0x310b8685e3e69cb05b251a12f5ffab23001cda42")
+	transferTxInputByt, _ := hexutil.Decode(transferTxInput)
+	transferTx := &TxRequest{
+		Origin:   common.HexToAddress("0x7Bd36074b61Cfe75a53e1B9DF7678C96E6463b02"),
+		Address:  &contractAddr,
+		Value:    big.NewInt(0),
+		Input:    transferTxInputByt,
+		GasLimit: gasLimit,
+		GasPrice: gasPrice,
+	}
+
+	return transferTx
 }
 
 // Helper function to pad strings with leading zeros
