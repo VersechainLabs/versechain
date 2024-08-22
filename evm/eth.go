@@ -386,8 +386,9 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 		if err != nil {
 			return err
 		}
-		gasfee := new(big.Int).Mul(new(big.Int).SetUint64(gasUsed), usdtPricePerGasUnit)
-		logrus.Printf("[Execute Txn] gasfee = %v, gasUsed = %v,gasPrice = %v", gasfee, gasUsed, usdtPricePerGasUnit)
+		gasfee := new(big.Int).Mul(new(big.Int).SetUint64(gasUsed), gasPrice)
+		gasfee.Div(gasfee, usdtPricePerGasUnit)
+		logrus.Printf("[Execute Txn] gasfee = %v, gasUsed = %v,gasPrice = %v,usdtPricePerGasUnit = %v", gasfee, gasUsed, gasPrice, usdtPricePerGasUnit)
 		cTransfer := ethstate.CanTransfer(sender.Address(), ConvertBigIntToUint256(gasfee))
 		if !cTransfer {
 			logrus.Printf("[Execute Txn] Insufficient Balance.sender balance : %v,", ethstate.stateDB.GetBalance(sender.Address()))
@@ -396,7 +397,7 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 		ethstate.Transfer(sender.Address(), cfg.Coinbase, ConvertBigIntToUint256(gasfee))
 		logrus.Printf("[Execute Txn] Create contract success. cfg.Coinbase = %v, gasfee = %v", cfg.Coinbase, gasfee)
 
-		transferTx := constructTransferTxInput(cfg, gasLimit, usdtPricePerGasUnit, gasfee, txReq.Origin)
+		transferTx := constructTransferTxInput(cfg, gasLimit, gasPrice, gasfee, txReq.Origin)
 		initRunTxReq(s, transferTx)
 
 	} else {
@@ -430,8 +431,9 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 		if err != nil {
 			return err
 		}
-		gasfee := new(big.Int).Mul(new(big.Int).SetUint64(gasUsed), usdtPricePerGasUnit)
-		logrus.Printf("[Execute Txn] gasfee = %v, gasUsed = %v,gasPrice = %v", gasfee, gasUsed, usdtPricePerGasUnit)
+		gasfee := new(big.Int).Mul(new(big.Int).SetUint64(gasUsed), gasPrice)
+		gasfee.Div(gasfee, usdtPricePerGasUnit)
+		logrus.Printf("[Execute Txn] gasfee = %v, gasUsed = %v,gasPrice = %v,usdtPricePerGasUnit = %v", gasfee, gasUsed, gasPrice, usdtPricePerGasUnit)
 		cTransfer := ethstate.CanTransfer(sender.Address(), ConvertBigIntToUint256(gasfee))
 		if !cTransfer {
 			logrus.Printf("[Execute Txn] Insufficient Balance.sender balance : %v,", ethstate.stateDB.GetBalance(sender.Address()))
@@ -440,7 +442,7 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 		ethstate.Transfer(sender.Address(), cfg.Coinbase, ConvertBigIntToUint256(gasfee))
 		logrus.Printf("[Execute Txn] SendTx success. cfg.Coinbase = %v, gasfee = %v", cfg.Coinbase, gasfee)
 
-		transferTx := constructTransferTxInput(cfg, gasLimit, usdtPricePerGasUnit, gasfee, txReq.Origin)
+		transferTx := constructTransferTxInput(cfg, gasLimit, gasPrice, gasfee, txReq.Origin)
 		initRunTxReq(s, transferTx)
 	}
 
