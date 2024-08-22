@@ -381,24 +381,10 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 			return err
 		}
 
-		gasUsed := gasLimit - leftOverGas
-		usdtPricePerGasUnit, err := GetUSDTPricePerGasUnit()
-		if err != nil {
-			return err
+		err2, done := calculateGasFee(gasLimit, leftOverGas, err, gasPrice, ethstate, sender, cfg, txReq, s)
+		if done {
+			return err2
 		}
-		gasfee := new(big.Int).Mul(new(big.Int).SetUint64(gasUsed), gasPrice)
-		gasfee.Div(gasfee, usdtPricePerGasUnit)
-		logrus.Printf("[Execute Txn] gasfee = %v, gasUsed = %v,gasPrice = %v,usdtPricePerGasUnit = %v", gasfee, gasUsed, gasPrice, usdtPricePerGasUnit)
-		cTransfer := ethstate.CanTransfer(sender.Address(), ConvertBigIntToUint256(gasfee))
-		if !cTransfer {
-			logrus.Printf("[Execute Txn] Insufficient Balance.sender balance : %v,", ethstate.stateDB.GetBalance(sender.Address()))
-			return nil
-		}
-		ethstate.Transfer(sender.Address(), cfg.Coinbase, ConvertBigIntToUint256(gasfee))
-		logrus.Printf("[Execute Txn] Create contract success. cfg.Coinbase = %v, gasfee = %v", cfg.Coinbase, gasfee)
-
-		transferTx := constructTransferTxInput(cfg, gasLimit, gasPrice, gasfee, txReq.Origin)
-		initRunTxReq(s, transferTx)
 
 	} else {
 		if cfg.EVMConfig.Tracer != nil && cfg.EVMConfig.Tracer.OnTxStart != nil {
@@ -425,28 +411,44 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 			return err
 		}
 
-		gasUsed := gasLimit - leftOverGas
-		logrus.Printf("[Execute Txn] gasLimit = %v, leftOverGas = %v", gasLimit, leftOverGas)
-		usdtPricePerGasUnit, err := GetUSDTPricePerGasUnit()
-		if err != nil {
-			return err
+		err2, done := calculateGasFee(gasLimit, leftOverGas, err, gasPrice, ethstate, sender, cfg, txReq, s)
+		if done {
+			return err2
 		}
-		gasfee := new(big.Int).Mul(new(big.Int).SetUint64(gasUsed), gasPrice)
-		gasfee.Div(gasfee, usdtPricePerGasUnit)
-		logrus.Printf("[Execute Txn] gasfee = %v, gasUsed = %v,gasPrice = %v,usdtPricePerGasUnit = %v", gasfee, gasUsed, gasPrice, usdtPricePerGasUnit)
-		cTransfer := ethstate.CanTransfer(sender.Address(), ConvertBigIntToUint256(gasfee))
-		if !cTransfer {
-			logrus.Printf("[Execute Txn] Insufficient Balance.sender balance : %v,", ethstate.stateDB.GetBalance(sender.Address()))
-			return nil
-		}
-		ethstate.Transfer(sender.Address(), cfg.Coinbase, ConvertBigIntToUint256(gasfee))
-		logrus.Printf("[Execute Txn] SendTx success. cfg.Coinbase = %v, gasfee = %v", cfg.Coinbase, gasfee)
-
-		transferTx := constructTransferTxInput(cfg, gasLimit, gasPrice, gasfee, txReq.Origin)
-		initRunTxReq(s, transferTx)
 	}
-
 	return nil
+}
+
+func calculateGasFee(gasLimit uint64, leftOverGas uint64, err error, gasPrice *big.Int, ethstate *EthState, sender vm.AccountRef, cfg *GethConfig, txReq *TxRequest, s *Solidity) (error, bool) {
+	gasUsed := gasLimit - leftOverGas
+	usdtPricePerGasUnit, err := GetUSDTPricePerGasUnit()
+	if err != nil {
+		return err, true
+	}
+	gasfee := new(big.Int).Mul(new(big.Int).SetUint64(gasUsed), gasPrice)
+	gasfeeFloat := new(big.Float).SetInt(gasfee)
+	usdtPricePerGasUnitFloat := new(big.Float).SetInt(usdtPricePerGasUnit)
+	gasFeeFloat := new(big.Float).Quo(gasfeeFloat, usdtPricePerGasUnitFloat)
+	gasFeeFloat = new(big.Float).SetPrec(18).Set(gasFeeFloat)
+
+	logrus.Printf("[Execute Txn] gasfee = %v, gasUsed = %v,gasPrice = %v,usdtPricePerGasUnit = %v", gasFeeFloat, gasUsed, gasPrice, usdtPricePerGasUnit)
+	tenPow18 := new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil)
+	tenPow18Float := new(big.Float).SetInt(tenPow18)
+	gasFeeInWeiFloat := new(big.Float).Mul(gasFeeFloat, tenPow18Float)
+	gasFeeInWei := new(big.Int)
+	gasFeeInWeiFloat.Int(gasFeeInWei)
+
+	cTransfer := ethstate.CanTransfer(sender.Address(), ConvertBigIntToUint256(gasFeeInWei))
+	if !cTransfer {
+		logrus.Printf("[Execute Txn] Insufficient Balance.sender balance : %v,", ethstate.stateDB.GetBalance(sender.Address()))
+		return nil, true
+	}
+	ethstate.Transfer(sender.Address(), cfg.Coinbase, ConvertBigIntToUint256(gasFeeInWei))
+	logrus.Printf("[Execute Txn] Create contract success. cfg.Coinbase = %v, gasFeeInWei = %v,gasFeeInWeiFloat = %v", cfg.Coinbase, gasFeeInWei, gasFeeInWeiFloat)
+
+	transferTx := constructTransferTxInput(cfg, gasLimit, gasPrice, gasFeeInWei, txReq.Origin)
+	initRunTxReq(s, transferTx)
+	return nil, false
 }
 
 // Function to construct the ERC-20 transfer transaction input data
@@ -461,10 +463,15 @@ func constructTransferTxInput(cfg *GethConfig, gasLimit uint64, gasPrice *big.In
 	// 3. Define the recipient address
 	recipient := cfg.Coinbase.Hex()[2:]
 
-	// 4. Encode the recipient and amount
-	recipientPadded := padLeft(recipient, 64)
-	amountPadded := padLeft(gasfee.Text(16), 64)
+	// 4. Define the amount to transfer (in Wei)
+	amount := new(big.Int)
+	amount.SetString(ConvertBigIntToUint256(gasfee).String(), 10)
 
+	// 5. Encode the recipient and amount
+	recipientPadded := padLeft(recipient, 64)
+	amountPadded := padLeft(amount.Text(16), 64)
+
+	// 6. Construct the transfer input data
 	// 5. Construct the transfer input data
 	transferTxInput := functionSelector + recipientPadded + amountPadded
 
