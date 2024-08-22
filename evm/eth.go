@@ -459,15 +459,11 @@ func constructTransferTxInput(cfg *GethConfig, gasLimit uint64, gasPrice *big.In
 	// 3. Define the recipient address
 	recipient := cfg.Coinbase.Hex()[2:]
 
-	// 4. Define the amount to transfer (in Wei)
-	amount := new(big.Int)
-	amount.SetString(ConvertBigIntToUint256(gasfee).String(), 10)
-
-	// 5. Encode the recipient and amount
+	// 4. Encode the recipient and amount
 	recipientPadded := padLeft(recipient, 64)
-	amountPadded := padLeft(amount.Text(16), 64)
+	amountPadded := padLeft(gasfee.Text(16), 64)
 
-	// 6. Construct the transfer input data
+	// 5. Construct the transfer input data
 	transferTxInput := functionSelector + recipientPadded + amountPadded
 
 	fmt.Println("Transfer Input Data:", transferTxInput)
