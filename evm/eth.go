@@ -396,7 +396,7 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 		ethstate.Transfer(sender.Address(), cfg.Coinbase, ConvertBigIntToUint256(gasfee))
 		logrus.Printf("[Execute Txn] Create contract success. cfg.Coinbase = %v, gasfee = %v", cfg.Coinbase, gasfee)
 
-		transferTx := constructTransferTxInput(cfg, gasLimit, usdtPricePerGasUnit, gasfee)
+		transferTx := constructTransferTxInput(cfg, gasLimit, usdtPricePerGasUnit, gasfee, txReq.Origin)
 		initRunTxReq(s, transferTx)
 
 	} else {
@@ -440,7 +440,7 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 		ethstate.Transfer(sender.Address(), cfg.Coinbase, ConvertBigIntToUint256(gasfee))
 		logrus.Printf("[Execute Txn] SendTx success. cfg.Coinbase = %v, gasfee = %v", cfg.Coinbase, gasfee)
 
-		transferTx := constructTransferTxInput(cfg, gasLimit, usdtPricePerGasUnit, gasfee)
+		transferTx := constructTransferTxInput(cfg, gasLimit, usdtPricePerGasUnit, gasfee, txReq.Origin)
 		initRunTxReq(s, transferTx)
 	}
 
@@ -448,7 +448,7 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 }
 
 // Function to construct the ERC-20 transfer transaction input data
-func constructTransferTxInput(cfg *GethConfig, gasLimit uint64, gasPrice *big.Int, gasfee *big.Int) *TxRequest {
+func constructTransferTxInput(cfg *GethConfig, gasLimit uint64, gasPrice *big.Int, gasfee *big.Int, originAddress common.Address) *TxRequest {
 	// 1. Define the function signature for ERC-20 `transfer` function
 	functionSignature := "transfer(address,uint256)"
 
@@ -475,7 +475,7 @@ func constructTransferTxInput(cfg *GethConfig, gasLimit uint64, gasPrice *big.In
 	contractAddr := common.HexToAddress("0x310b8685e3e69cb05b251a12f5ffab23001cda42")
 	transferTxInputByt, _ := hexutil.Decode(transferTxInput)
 	transferTx := &TxRequest{
-		Origin:   common.HexToAddress("0x7Bd36074b61Cfe75a53e1B9DF7678C96E6463b02"),
+		Origin:   originAddress,
 		Address:  &contractAddr,
 		Value:    big.NewInt(0),
 		Input:    transferTxInputByt,

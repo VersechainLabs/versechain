@@ -27,7 +27,7 @@ func GetUSDTPricePerGasUnit() (*big.Int, error) {
 	}
 
 	priceBigInt := new(big.Int)
-	priceBigInt.SetString(fmt.Sprintf("%.0f", priceInETH*1e18), 10) // 假设价格单位为 wei
+	priceBigInt.SetString(fmt.Sprintf("%.0f", priceInETH*1e18), 10)
 
 	return priceBigInt, nil
 }
