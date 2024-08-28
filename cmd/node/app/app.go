@@ -11,7 +11,7 @@ import (
 	"itachi/utils"
 
 	"github.com/common-nighthawk/go-figure"
-	"github.com/yu-org/yu/apps/poa"
+	"github.com/yu-org/nine-tripods/consensus/poa"
 	"github.com/yu-org/yu/core/kernel"
 	"github.com/yu-org/yu/core/startup"
 )
