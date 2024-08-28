@@ -117,8 +117,14 @@ func SignTransaction(gethCfg *evm.GethConfig, privateKeyStr string, tx *types.Tr
 	if err != nil {
 		log.Fatal(err)
 	}
+	fmt.Println(ToJsonString(signedTx))
+	var rawTxBytes []byte
+	if tx.Type() == 0 {
+		rawTxBytes, err = rlp.EncodeToBytes(signedTx)
+	} else {
+		rawTxBytes, err = signedTx.MarshalBinary()
+	}
 
-	rawTxBytes, err := rlp.EncodeToBytes(signedTx)
 	if err != nil {
 		log.Fatal(err)
 	}

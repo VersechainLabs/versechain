@@ -3,6 +3,7 @@ package ethrpc
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/sirupsen/logrus"
@@ -681,6 +682,9 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		State:      stateDb,
 		ErrorRatio: estimateGasErrorRatio,
 	}
+	originGasLimit := args.Gas
+	args.Gas = nil
+
 	if err := args.CallDefaults(gasCap, header.BaseFee, b.ChainConfig().ChainID); err != nil {
 		return 0, err
 	}
@@ -693,6 +697,11 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		}
 		return 0, err
 	}
+
+	if originGasLimit != nil && uint64(*originGasLimit) < estimate {
+		return 0, fmt.Errorf("gas required exceeds allowance (%d)", uint64(*originGasLimit))
+	}
+
 	return hexutil.Uint64(estimate), nil
 }
 
@@ -1317,6 +1326,10 @@ func (s *TransactionAPI) SendRawTransaction(ctx context.Context, input hexutil.B
 	if err := tx.UnmarshalBinary(input); err != nil {
 		return common.Hash{}, err
 	}
+
+	byt, _ := json.Marshal(tx)
+	logrus.Infof("[SendRawTransaction] Tx = %v , Raw = %x", string(byt), hexutil.Encode(input))
+
 	return SubmitTransaction(ctx, s.b, tx)
 }
 
