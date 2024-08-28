@@ -20,15 +20,16 @@ import (
 func deployAndMintUsdv() {
 	//_, contractAddr := createUsdvContract()
 	contractAddr := common.HexToAddress("0x310b8685e3e69cb05b251a12f5ffab23001cda42")
+	testWalletAddr_9527 := common.HexToAddress("0x2Efe24c33f049Ffec693ec1D809A45Fff14e9527")
 	// mintErc20(contractAddr)
 	//sendEvent(contractAddr)
 	//sendEmptyEvent(contractAddr)
 
 	//testReadCache(contractAddr)
 
-	readUsdvBalance(contractAddr)
+	readUsdvBalance(contractAddr, testWalletAddr_9527)
 	testTransferUsdv(contractAddr)
-	readUsdvBalance(contractAddr)
+	readUsdvBalance(contractAddr, testWalletAddr_9527)
 
 }
 
@@ -185,7 +186,7 @@ func mintUsdv(contractAddr common.Address) {
 	log.Printf("Mint Log: %v. Is nil = %v", receipt.Logs, receipt.Logs == nil)
 }
 
-func readUsdvBalance(contractAddr common.Address) {
+func readUsdvBalance(contractAddr common.Address, walletAddr common.Address) {
 	funcName := "Read Balance"
 	log.Println("================================")
 	log.Println(funcName)
@@ -199,7 +200,7 @@ func readUsdvBalance(contractAddr common.Address) {
 		log.Fatal("failed to parse abi file: ", err)
 	}
 
-	data, _ := contractABI.Pack("balanceOf", testWalletAddr)
+	data, _ := contractABI.Pack("balanceOf", walletAddr)
 
 	arg := ethereum.CallMsg{
 		To:   &contractAddr,
