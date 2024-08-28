@@ -26,6 +26,7 @@ const (
 	testWalletAddrStr       = "0x7Bd36074b61Cfe75a53e1B9DF7678C96E6463b02"
 	coinbaseWalletAddrStr   = "0xbaeFe32bc1636a90425AcBCC8cfAD1b0507eCdE1"
 
+	//Endpoint = "https://rpc-alpha.versechain.xyz"
 	Endpoint = "http://localhost:9092"
 )
 
@@ -50,12 +51,14 @@ func main() {
 	//TestReceiptForFailedTx()
 	//testTransferEth()
 	//testGetBalance()
-	testCreateContract()
+	//testCreateContract()
 	//testMintErc20()
 	//testErc20DeployAndUse()
 
 	// contractAddr := common.HexToAddress("0x310b8685e3e69cb05b251a12f5ffab23001cda42")
 	// mintErc20(contractAddr)
+
+	deployAndMintUsdv()
 }
 
 func testGetBalance() {
