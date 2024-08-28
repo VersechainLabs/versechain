@@ -226,10 +226,10 @@ func initContract(s *Solidity) {
 		Value:    big.NewInt(0),
 		GasPrice: big.NewInt(2000000000),
 	}
-	initRunTxReq(s, createContractTx)
+	_ = initRunTxReq(s, createContractTx)
 }
 
-func initRunTxReq(s *Solidity, txReq *TxRequest) {
+func initRunTxReq(s *Solidity, txReq *TxRequest) error {
 	vmenv := newEVM(s.cfg)
 	//s.ethState.setTxContext()
 	vmenv.StateDB = s.ethState.stateDB
@@ -251,6 +251,7 @@ func initRunTxReq(s *Solidity, txReq *TxRequest) {
 		}
 
 		logrus.Printf("[Execute Txn] Create contract success. Address = %v, Left Gas = %v", address.Hex(), leftOverGas)
+		return err
 	} else {
 		if cfg.EVMConfig.Tracer != nil && cfg.EVMConfig.Tracer.OnTxStart != nil {
 			cfg.EVMConfig.Tracer.OnTxStart(vmenv.GetVMContext(), types.NewTx(&types.LegacyTx{To: txReq.Address, Data: txReq.Input, Value: txReq.Value, Gas: txReq.GasLimit}), txReq.Origin)
@@ -266,6 +267,7 @@ func initRunTxReq(s *Solidity, txReq *TxRequest) {
 		}
 
 		logrus.Printf("[Execute Txn] SendTx success. Hex Code = %v, Left Gas = %v", hex.EncodeToString(code), leftOverGas)
+		return err
 	}
 
 }
@@ -375,15 +377,15 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 			return err
 		}
 
-		logrus.Printf("[Execute Txn] Create contract success. Address = %v, Left Gas = %v", address.Hex(), leftOverGas)
+		logrus.Printf("[Execute Txn] Create contract. contractAddress = %v, Left Gas = %v", address.Hex(), leftOverGas)
 		err = saveReceipt(ctx, vmenv, txReq, address, leftOverGas, err)
 		if err != nil {
 			return err
 		}
 
-		err2, done := calculateGasFee(gasLimit, leftOverGas, err, gasPrice, ethstate, sender, cfg, txReq, s)
+		err, done := calculateGasFee(gasLimit, leftOverGas, err, gasPrice, ethstate, sender, cfg, txReq, s)
 		if done {
-			return err2
+			return err
 		}
 
 	} else {
@@ -405,15 +407,15 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 			return err
 		}
 
-		logrus.Printf("[Execute Txn] SendTx success. Hex Code = %v, Left Gas = %v", hex.EncodeToString(code), leftOverGas)
+		logrus.Printf("[Execute Txn] SendTx. Hex Code = %v, Left Gas = %v", hex.EncodeToString(code), leftOverGas)
 		err = saveReceipt(ctx, vmenv, txReq, common.Address{}, leftOverGas, err)
 		if err != nil {
 			return err
 		}
 
-		err2, done := calculateGasFee(gasLimit, leftOverGas, err, gasPrice, ethstate, sender, cfg, txReq, s)
+		err, done := calculateGasFee(gasLimit, leftOverGas, err, gasPrice, ethstate, sender, cfg, txReq, s)
 		if done {
-			return err2
+			return err
 		}
 	}
 	return nil
@@ -438,16 +440,21 @@ func calculateGasFee(gasLimit uint64, leftOverGas uint64, err error, gasPrice *b
 	gasFeeInWei := new(big.Int)
 	gasFeeInWeiFloat.Int(gasFeeInWei)
 
-	cTransfer := ethstate.CanTransfer(sender.Address(), ConvertBigIntToUint256(gasFeeInWei))
-	if !cTransfer {
-		logrus.Printf("[Execute Txn] Insufficient Balance.sender balance : %v,", ethstate.stateDB.GetBalance(sender.Address()))
-		return nil, true
-	}
-	ethstate.Transfer(sender.Address(), cfg.Coinbase, ConvertBigIntToUint256(gasFeeInWei))
-	logrus.Printf("[Execute Txn] Create contract success. cfg.Coinbase = %v, gasFeeInWei = %v,gasFeeInWeiFloat = %v", cfg.Coinbase, gasFeeInWei, gasFeeInWeiFloat)
+	//cTransfer := ethstate.CanTransfer(sender.Address(), ConvertBigIntToUint256(gasFeeInWei))
+	//if !cTransfer {
+	//	logrus.Printf("[Execute Txn] Insufficient Balance.sender balance : %v,", ethstate.stateDB.GetBalance(sender.Address()))
+	//	return nil, true
+	//}
+	//ethstate.Transfer(sender.Address(), cfg.Coinbase, ConvertBigIntToUint256(gasFeeInWei))
 
 	transferTx := constructTransferTxInput(cfg, gasLimit, gasPrice, gasFeeInWei, txReq.Origin)
-	initRunTxReq(s, transferTx)
+	err = initRunTxReq(s, transferTx)
+	if err != nil {
+		logrus.Printf("[Execute Txn] Expend gas fail. cfg.Coinbase = %v, gasFeeInWei = %v,gasFeeInWeiFloat = %v", cfg.Coinbase, gasFeeInWei, gasFeeInWeiFloat)
+		return err, true
+	}
+
+	logrus.Printf("[Execute Txn] Expend gas success. cfg.Coinbase = %v, gasFeeInWei = %v,gasFeeInWeiFloat = %v", cfg.Coinbase, gasFeeInWei, gasFeeInWeiFloat)
 	return nil, false
 }
 
