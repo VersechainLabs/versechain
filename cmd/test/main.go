@@ -110,7 +110,7 @@ func testCreateContract() {
 	}
 
 	gasLimit := estimateGas(data)
-	nonce := getNonce()
+	nonce := getNonce() + 1
 	gasPrice := getGasPrice()
 
 	tx := types.NewTx(&types.LegacyTx{

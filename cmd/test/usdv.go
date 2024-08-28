@@ -106,7 +106,7 @@ func createUsdvContract() (txHash string, contractAddr common.Address) {
 
 func testTransferUsdv(contractAddr common.Address) {
 	abi, _ := abigen.TestErc20MetaData.GetAbi()
-	data, _ := abi.Pack("transfer", common.HexToAddress("0x2Efe24c33f049Ffec693ec1D809A45Fff14e9527"), ether)
+	data, _ := abi.Pack("transfer", common.HexToAddress("0x2Efe24c33f049Ffec693ec1D809A45Fff14e9527"), ether_100)
 	log.Printf("Data: %x\n", data)
 
 	dataHex := hexutil.Bytes(data)
