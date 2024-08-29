@@ -26,17 +26,19 @@ const (
 	testWalletAddrStr            = "0x7Bd36074b61Cfe75a53e1B9DF7678C96E6463b02"
 	coinbaseWalletAddrStr        = "0xbaeFe32bc1636a90425AcBCC8cfAD1b0507eCdE1"
 	testWalletPrivateKeyStr_9527 = "a7b9713dcafa26e8df304f8d9cc5bb314a3164f7d0266ef1dd509b727998e442"
+	testWalletAddrStr_9527       = "0x2Efe24c33f049Ffec693ec1D809A45Fff14e9527"
 
 	//Endpoint = "https://rpc-alpha.versechain.xyz"
 	Endpoint = "http://localhost:9092"
 )
 
 var (
-	rpcId          = 0
-	gethCfg        = evm.LoadEvmConfig("./conf/evm_cfg.toml")
-	testWalletAddr = common.HexToAddress(testWalletAddrStr)
-	testPrivateKey *ecdsa.PrivateKey
-	client         *ethclient.Client
+	rpcId               = 0
+	gethCfg             = evm.LoadEvmConfig("./conf/evm_cfg.toml")
+	testWalletAddr      = common.HexToAddress(testWalletAddrStr)
+	testWalletAddr_9527 = common.HexToAddress(testWalletAddrStr_9527)
+	testPrivateKey      *ecdsa.PrivateKey
+	client              *ethclient.Client
 
 	ether     = new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil)
 	ether_100 = new(big.Int).Mul(big.NewInt(100), ether)
@@ -110,7 +112,7 @@ func testCreateContract() {
 	}
 
 	gasLimit := estimateGas(data)
-	nonce := getNonce() + 1
+	nonce := getNonceByAccount(testWalletAddr_9527) + 1
 	gasPrice := getGasPrice()
 
 	tx := types.NewTx(&types.LegacyTx{
@@ -240,6 +242,12 @@ func estimateGas(data hexutil.Bytes) uint64 {
 
 func getNonce() uint64 {
 	getNonceRequest := GenerateRequestBody("eth_getTransactionCount", testWalletAddrStr, "latest")
+	getNonceResponse := SendRequest(getNonceRequest)
+	return ParseResponseAsBigInt(getNonceResponse).Uint64()
+}
+
+func getNonceByAccount(addr common.Address) uint64 {
+	getNonceRequest := GenerateRequestBody("eth_getTransactionCount", addr, "latest")
 	getNonceResponse := SendRequest(getNonceRequest)
 	return ParseResponseAsBigInt(getNonceResponse).Uint64()
 }
