@@ -380,6 +380,7 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 			byt, _ := json.Marshal(txReq)
 			logrus.Printf("[Execute Txn] Create contract Failed. err = %v. Request = %v", err, string(byt))
 			_ = saveReceipt(ctx, vmenv, txReq, address, leftOverGas, err)
+			_ = calculateGasFee(gasLimit, leftOverGas, err, gasPrice, cfg, txReq, s)
 			return err
 		}
 
@@ -410,6 +411,7 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 			byt, _ := json.Marshal(txReq)
 			logrus.Printf("[Execute Txn] SendTx Failed. err = %v. Request = %v", err, string(byt))
 			_ = saveReceipt(ctx, vmenv, txReq, common.Address{}, leftOverGas, err)
+			_ = calculateGasFee(gasLimit, leftOverGas, err, gasPrice, cfg, txReq, s)
 			return err
 		}
 
