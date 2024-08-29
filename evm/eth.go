@@ -362,6 +362,12 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 	sender := vm.AccountRef(txReq.Origin)
 	rules := cfg.ChainConfig.Rules(vmenv.Context.BlockNumber, vmenv.Context.Random != nil, vmenv.Context.Time)
 
+	//Calculate whether the maximum consumption meets the balance
+	err = canTransfer(gasLimit, txReq, gasPrice, s)
+	if err != nil {
+		return err
+	}
+
 	if txReq.Address == nil {
 		if cfg.EVMConfig.Tracer != nil && cfg.EVMConfig.Tracer.OnTxStart != nil {
 			cfg.EVMConfig.Tracer.OnTxStart(vmenv.GetVMContext(), types.NewTx(&types.LegacyTx{Data: txReq.Input, Value: txReq.Value, Gas: txReq.GasLimit}), txReq.Origin)
@@ -383,8 +389,8 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 			return err
 		}
 
-		err, done := calculateGasFee(gasLimit, leftOverGas, err, gasPrice, ethstate, sender, cfg, txReq, s)
-		if done {
+		err = calculateGasFee(gasLimit, leftOverGas, err, gasPrice, ethstate, sender, cfg, txReq, s)
+		if err != nil {
 			return err
 		}
 
@@ -413,19 +419,19 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 			return err
 		}
 
-		err, done := calculateGasFee(gasLimit, leftOverGas, err, gasPrice, ethstate, sender, cfg, txReq, s)
-		if done {
+		err = calculateGasFee(gasLimit, leftOverGas, err, gasPrice, ethstate, sender, cfg, txReq, s)
+		if err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func calculateGasFee(gasLimit uint64, leftOverGas uint64, err error, gasPrice *big.Int, ethstate *EthState, sender vm.AccountRef, cfg *GethConfig, txReq *TxRequest, s *Solidity) (error, bool) {
+func calculateGasFee(gasLimit uint64, leftOverGas uint64, err error, gasPrice *big.Int, ethstate *EthState, sender vm.AccountRef, cfg *GethConfig, txReq *TxRequest, s *Solidity) error {
 	gasUsed := gasLimit - leftOverGas
 	usdtPricePerGasUnit, err := GetUSDTPricePerGasUnit()
 	if err != nil {
-		return err, true
+		return err
 	}
 	gasfee := new(big.Int).Mul(new(big.Int).SetUint64(gasUsed), gasPrice)
 	gasfeeFloat := new(big.Float).SetInt(gasfee)
@@ -440,24 +446,35 @@ func calculateGasFee(gasLimit uint64, leftOverGas uint64, err error, gasPrice *b
 	gasFeeInWei := new(big.Int)
 	gasFeeInWeiFloat.Int(gasFeeInWei)
 
-	err = canTransfer(gasLimit, txReq, gasPrice, s, gasFeeInWei)
-	if err != nil {
-		return err, true
-	}
-
 	transferTx := constructTransferTxInput(cfg, gasLimit, gasPrice, gasFeeInWei, txReq.Origin)
 	_, err = initRunTxReq(s, transferTx)
 	if err != nil {
 		logrus.Printf("[Execute Txn] Expend gas fail. cfg.Coinbase = %v, gasFeeInWei = %v,gasFeeInWeiFloat = %v", cfg.Coinbase, gasFeeInWei, gasFeeInWeiFloat)
-		return err, true
+		return err
 	}
 
 	logrus.Printf("[Execute Txn] Expend gas success. cfg.Coinbase = %v, gasFeeInWei = %v,gasFeeInWeiFloat = %v", cfg.Coinbase, gasFeeInWei, gasFeeInWeiFloat)
-	return nil, false
+	return nil
 }
 
-func canTransfer(gasLimit uint64, txReq *TxRequest, gasPrice *big.Int, s *Solidity, gasFee *big.Int) error {
+func canTransfer(gasLimit uint64, txReq *TxRequest, gasPrice *big.Int, s *Solidity) error {
 	balanceOfSelector := "balanceOf(address)"
+
+	usdtPricePerGasUnit, err := GetUSDTPricePerGasUnit()
+	if err != nil {
+		return err
+	}
+	gasfee := new(big.Int).Mul(new(big.Int).SetUint64(gasLimit), gasPrice)
+	gasfeeFloat := new(big.Float).SetInt(gasfee)
+	usdtPricePerGasUnitFloat := new(big.Float).SetInt(usdtPricePerGasUnit)
+	gasFeeFloat := new(big.Float).Quo(gasfeeFloat, usdtPricePerGasUnitFloat)
+	gasFeeFloat = new(big.Float).SetPrec(18).Set(gasFeeFloat)
+
+	tenPow18 := new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil)
+	tenPow18Float := new(big.Float).SetInt(tenPow18)
+	gasFeeInWeiFloat := new(big.Float).Mul(gasFeeFloat, tenPow18Float)
+	gasFeeInWei := new(big.Int)
+	gasFeeInWeiFloat.Int(gasFeeInWei)
 
 	paddedAddress := padLeft(txReq.Origin.Hex()[2:], 64)
 
@@ -487,8 +504,8 @@ func canTransfer(gasLimit uint64, txReq *TxRequest, gasPrice *big.Int, s *Solidi
 	}
 	logrus.Printf("[Execute Txn] Get balance: %v", balance.String())
 
-	if balance.Cmp(gasFee) < 0 {
-		return fmt.Errorf("[Execute Txn] Insufficient balance: balance = %s, required = %s", balance.String(), gasFee.String())
+	if balance.Cmp(gasFeeInWei) < 0 {
+		return fmt.Errorf("[Execute Txn] Insufficient balance: balance = %s, required = %s", balance.String(), gasFeeInWei.String())
 	}
 
 	return err
