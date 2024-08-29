@@ -370,14 +370,21 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 		ethstate.Prepare(rules, cfg.Origin, cfg.Coinbase, nil, vm.ActivePrecompiles(rules), nil)
 
 		_, address, leftOverGas, err := vmenv.Create(sender, txReq.Input, txReq.GasLimit, uint256.MustFromBig(txReq.Value))
-
-		logrus.Printf("[Execute Txn] Create contract. contractAddress = %v, Left Gas = %v", address.Hex(), leftOverGas)
-
-		err = calculateGasFee(gasLimit, leftOverGas, err, gasPrice, ethstate, sender, cfg, txReq, s)
-		err = saveReceipt(ctx, vmenv, txReq, address, leftOverGas, err)
 		if err != nil {
 			byt, _ := json.Marshal(txReq)
 			logrus.Printf("[Execute Txn] Create contract Failed. err = %v. Request = %v", err, string(byt))
+			_ = saveReceipt(ctx, vmenv, txReq, address, leftOverGas, err)
+			return err
+		}
+
+		logrus.Printf("[Execute Txn] Create contract. contractAddress = %v, Left Gas = %v", address.Hex(), leftOverGas)
+		err = saveReceipt(ctx, vmenv, txReq, address, leftOverGas, err)
+		if err != nil {
+			return err
+		}
+
+		err, done := calculateGasFee(gasLimit, leftOverGas, err, gasPrice, ethstate, sender, cfg, txReq, s)
+		if done {
 			return err
 		}
 
@@ -389,30 +396,36 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 		ethstate.Prepare(rules, cfg.Origin, cfg.Coinbase, txReq.Address, vm.ActivePrecompiles(rules), nil)
 		ethstate.SetNonce(txReq.Origin, ethstate.GetNonce(sender.Address())+1)
 
-		logrus.Printf("[Execute Txn] Before transfer: account %s balance %d \n", sender.Address(), ethstate.stateDB.GetBalance(sender.Address()))
+		logrus.Printf("before transfer: account %s balance %d \n", sender.Address(), ethstate.stateDB.GetBalance(sender.Address()))
 
 		code, leftOverGas, err := vmenv.Call(sender, *txReq.Address, txReq.Input, txReq.GasLimit, uint256.MustFromBig(txReq.Value))
-
-		logrus.Printf("[Execute Txn] After transfer: account %s balance %d \n", sender.Address(), ethstate.stateDB.GetBalance(sender.Address()))
-		logrus.Printf("[Execute Txn] SendTx. Hex Code = %v, Left Gas = %v", hex.EncodeToString(code), leftOverGas)
-
-		err = calculateGasFee(gasLimit, leftOverGas, err, gasPrice, ethstate, sender, cfg, txReq, s)
-		err = saveReceipt(ctx, vmenv, txReq, common.Address{}, leftOverGas, err)
-
+		logrus.Printf("after transfer: account %s balance %d \n", sender.Address(), ethstate.stateDB.GetBalance(sender.Address()))
 		if err != nil {
 			byt, _ := json.Marshal(txReq)
 			logrus.Printf("[Execute Txn] SendTx Failed. err = %v. Request = %v", err, string(byt))
+			_ = saveReceipt(ctx, vmenv, txReq, common.Address{}, leftOverGas, err)
+			return err
+		}
+
+		logrus.Printf("[Execute Txn] SendTx. Hex Code = %v, Left Gas = %v", hex.EncodeToString(code), leftOverGas)
+		err = saveReceipt(ctx, vmenv, txReq, common.Address{}, leftOverGas, err)
+		if err != nil {
+			return err
+		}
+
+		err, done := calculateGasFee(gasLimit, leftOverGas, err, gasPrice, ethstate, sender, cfg, txReq, s)
+		if done {
 			return err
 		}
 	}
 	return nil
 }
 
-func calculateGasFee(gasLimit uint64, leftOverGas uint64, err error, gasPrice *big.Int, ethstate *EthState, sender vm.AccountRef, cfg *GethConfig, txReq *TxRequest, s *Solidity) error {
+func calculateGasFee(gasLimit uint64, leftOverGas uint64, err error, gasPrice *big.Int, ethstate *EthState, sender vm.AccountRef, cfg *GethConfig, txReq *TxRequest, s *Solidity) (error, bool) {
 	gasUsed := gasLimit - leftOverGas
 	usdtPricePerGasUnit, err := GetUSDTPricePerGasUnit()
 	if err != nil {
-		return err
+		return err, true
 	}
 	gasfee := new(big.Int).Mul(new(big.Int).SetUint64(gasUsed), gasPrice)
 	gasfeeFloat := new(big.Float).SetInt(gasfee)
@@ -429,18 +442,18 @@ func calculateGasFee(gasLimit uint64, leftOverGas uint64, err error, gasPrice *b
 
 	err = canTransfer(gasLimit, txReq, gasPrice, s, gasFeeInWei)
 	if err != nil {
-		return err
+		return err, true
 	}
 
 	transferTx := constructTransferTxInput(cfg, gasLimit, gasPrice, gasFeeInWei, txReq.Origin)
 	_, err = initRunTxReq(s, transferTx)
 	if err != nil {
 		logrus.Printf("[Execute Txn] Expend gas fail. cfg.Coinbase = %v, gasFeeInWei = %v,gasFeeInWeiFloat = %v", cfg.Coinbase, gasFeeInWei, gasFeeInWeiFloat)
-		return err
+		return err, true
 	}
 
 	logrus.Printf("[Execute Txn] Expend gas success. cfg.Coinbase = %v, gasFeeInWei = %v,gasFeeInWeiFloat = %v", cfg.Coinbase, gasFeeInWei, gasFeeInWeiFloat)
-	return nil
+	return nil, false
 }
 
 func canTransfer(gasLimit uint64, txReq *TxRequest, gasPrice *big.Int, s *Solidity, gasFee *big.Int) error {
