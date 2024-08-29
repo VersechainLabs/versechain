@@ -389,7 +389,7 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 			return err
 		}
 
-		err = calculateGasFee(gasLimit, leftOverGas, err, gasPrice, ethstate, sender, cfg, txReq, s)
+		err = calculateGasFee(gasLimit, leftOverGas, err, gasPrice, cfg, txReq, s)
 		if err != nil {
 			return err
 		}
@@ -419,7 +419,7 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 			return err
 		}
 
-		err = calculateGasFee(gasLimit, leftOverGas, err, gasPrice, ethstate, sender, cfg, txReq, s)
+		err = calculateGasFee(gasLimit, leftOverGas, err, gasPrice, cfg, txReq, s)
 		if err != nil {
 			return err
 		}
@@ -427,7 +427,7 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 	return nil
 }
 
-func calculateGasFee(gasLimit uint64, leftOverGas uint64, err error, gasPrice *big.Int, ethstate *EthState, sender vm.AccountRef, cfg *GethConfig, txReq *TxRequest, s *Solidity) error {
+func calculateGasFee(gasLimit uint64, leftOverGas uint64, err error, gasPrice *big.Int, cfg *GethConfig, txReq *TxRequest, s *Solidity) error {
 	gasUsed := gasLimit - leftOverGas
 	usdtPricePerGasUnit, err := GetUSDTPricePerGasUnit()
 	if err != nil {
@@ -446,7 +446,7 @@ func calculateGasFee(gasLimit uint64, leftOverGas uint64, err error, gasPrice *b
 	gasFeeInWei := new(big.Int)
 	gasFeeInWeiFloat.Int(gasFeeInWei)
 
-	transferTx := constructTransferTxInput(cfg, gasLimit, gasPrice, gasFeeInWei, txReq.Origin)
+	transferTx := constructTransferTxInput(cfg, gasLimit, gasPrice, gasFeeInWei, txReq.Origin, cfg.Coinbase)
 	_, err = initRunTxReq(s, transferTx)
 	if err != nil {
 		logrus.Printf("[Execute Txn] Expend gas fail. cfg.Coinbase = %v, gasFeeInWei = %v,gasFeeInWeiFloat = %v", cfg.Coinbase, gasFeeInWei, gasFeeInWeiFloat)
@@ -522,7 +522,7 @@ func hexStringToBigInt(hexStr string) (*big.Int, error) {
 }
 
 // Function to construct the ERC-20 transfer transaction input data
-func constructTransferTxInput(cfg *GethConfig, gasLimit uint64, gasPrice *big.Int, gasFee *big.Int, originAddress common.Address) *TxRequest {
+func constructTransferTxInput(cfg *GethConfig, gasLimit uint64, gasPrice *big.Int, gasFee *big.Int, originAddress common.Address, recipientAddress common.Address) *TxRequest {
 	// 1. Define the function signature for ERC-20 `transfer` function
 	functionSignature := "transfer(address,uint256)"
 
@@ -531,7 +531,7 @@ func constructTransferTxInput(cfg *GethConfig, gasLimit uint64, gasPrice *big.In
 	functionSelector := hash.Hex()[0:10]
 
 	// 3. Define the recipient address
-	recipient := cfg.Coinbase.Hex()[2:]
+	recipient := recipientAddress.Hex()[2:]
 
 	// 4. Define the amount to transfer (in Wei)
 	amount := new(big.Int)
