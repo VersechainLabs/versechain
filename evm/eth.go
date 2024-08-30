@@ -374,6 +374,7 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 	//Calculate whether the maximum consumption meets the balance
 	err = canTransfer(gasLimit, txReq, gasPrice, s)
 	if err != nil {
+		_ = saveReceipt(ctx, vmenv, txReq, common.Address{}, 0, err)
 		return err
 	}
 
@@ -519,7 +520,7 @@ func canTransfer(gasLimit uint64, txReq *TxRequest, gasPrice *big.Int, s *Solidi
 		return fmt.Errorf("[Execute Txn] Insufficient balance: balance = %s, required = %s", balance.String(), gasFeeInWei.String())
 	}
 
-	return err
+	return nil
 }
 
 func hexStringToBigInt(hexStr string) (*big.Int, error) {
