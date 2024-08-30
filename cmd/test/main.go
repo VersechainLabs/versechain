@@ -22,18 +22,23 @@ import (
 )
 
 const (
-	testWalletPrivateKeyStr = "32e3b56c9f2763d2332e6e4188e4755815ac96441e899de121969845e343c2ff"
-	testWalletAddrStr       = "0x7Bd36074b61Cfe75a53e1B9DF7678C96E6463b02"
+	testWalletPrivateKeyStr      = "32e3b56c9f2763d2332e6e4188e4755815ac96441e899de121969845e343c2ff"
+	testWalletAddrStr            = "0x7Bd36074b61Cfe75a53e1B9DF7678C96E6463b02"
+	coinbaseWalletAddrStr        = "0xbaeFe32bc1636a90425AcBCC8cfAD1b0507eCdE1"
+	testWalletPrivateKeyStr_9527 = "a7b9713dcafa26e8df304f8d9cc5bb314a3164f7d0266ef1dd509b727998e442"
+	testWalletAddrStr_9527       = "0x2Efe24c33f049Ffec693ec1D809A45Fff14e9527"
 
+	//Endpoint = "https://rpc-alpha.versechain.xyz"
 	Endpoint = "http://localhost:9092"
 )
 
 var (
-	rpcId          = 0
-	gethCfg        = evm.LoadEvmConfig("./conf/evm_cfg.toml")
-	testWalletAddr = common.HexToAddress(testWalletAddrStr)
-	testPrivateKey *ecdsa.PrivateKey
-	client         *ethclient.Client
+	rpcId               = 0
+	gethCfg             = evm.LoadEvmConfig("./conf/evm_cfg.toml")
+	testWalletAddr      = common.HexToAddress(testWalletAddrStr)
+	testWalletAddr_9527 = common.HexToAddress(testWalletAddrStr_9527)
+	testPrivateKey      *ecdsa.PrivateKey
+	client              *ethclient.Client
 
 	ether     = new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil)
 	ether_100 = new(big.Int).Mul(big.NewInt(100), ether)
@@ -49,13 +54,19 @@ func main() {
 	//TestReceiptForFailedTx()
 	//testTransferEth()
 	//testGetBalance()
-	//testCreateContract()
+	testCreateContract()
 	//testMintErc20()
-	testErc20DeployAndUse()
+	//testErc20DeployAndUse()
+
+	// contractAddr := common.HexToAddress("0x310b8685e3e69cb05b251a12f5ffab23001cda42")
+	// mintErc20(contractAddr)
+
+	//deployAndMintUsdv()
 }
 
 func testGetBalance() {
-	checkBalanceParam := []interface{}{testWalletAddrStr, "latest"}
+	// checkBalanceParam := []interface{}{testWalletAddrStr, "latest"}
+	checkBalanceParam := []interface{}{coinbaseWalletAddrStr, "latest"}
 	checkBalanceBody := GenerateRequestBody("eth_getBalance", checkBalanceParam...)
 	log.Println(checkBalanceBody)
 	response := SendRequest(checkBalanceBody)
@@ -101,7 +112,7 @@ func testCreateContract() {
 	}
 
 	gasLimit := estimateGas(data)
-	nonce := getNonce()
+	nonce := getNonceByAccount(testWalletAddr_9527) + 1
 	gasPrice := getGasPrice()
 
 	tx := types.NewTx(&types.LegacyTx{
@@ -111,7 +122,7 @@ func testCreateContract() {
 		To:       nil,
 		Data:     data,
 	})
-	rawTx := SignTransaction(gethCfg, testWalletPrivateKeyStr, tx)
+	rawTx := SignTransaction(gethCfg, testWalletPrivateKeyStr_9527, tx)
 	requestBody := GenerateRequestBody("eth_sendRawTransaction", rawTx)
 	response := SendRequest(requestBody)
 
@@ -231,6 +242,12 @@ func estimateGas(data hexutil.Bytes) uint64 {
 
 func getNonce() uint64 {
 	getNonceRequest := GenerateRequestBody("eth_getTransactionCount", testWalletAddrStr, "latest")
+	getNonceResponse := SendRequest(getNonceRequest)
+	return ParseResponseAsBigInt(getNonceResponse).Uint64()
+}
+
+func getNonceByAccount(addr common.Address) uint64 {
+	getNonceRequest := GenerateRequestBody("eth_getTransactionCount", addr, "latest")
 	getNonceResponse := SendRequest(getNonceRequest)
 	return ParseResponseAsBigInt(getNonceResponse).Uint64()
 }

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/BurntSushi/toml"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/yu-org/yu/common/yerror"
 	"itachi/evm/config"
@@ -97,6 +98,10 @@ type GethConfig struct {
 	EnableEthRPC bool   `toml:"enable_eth_rpc"`
 	EthHost      string `toml:"eth_host"`
 	EthPort      string `toml:"eth_port"`
+
+	GenesisContractCode     string `toml:"genesis_contract_code"`
+	GenesisContractDeployer string `toml:"genesis_contract_deployer"`
+	GenesisContractAddress  string
 }
 
 // sets defaults on the config
@@ -105,7 +110,7 @@ func SetDefaultGethConfig() *GethConfig {
 		ChainConfig: params.AllEthashProtocolChanges,
 		Difficulty:  big.NewInt(1),
 		Origin:      common.HexToAddress("0x0"),
-		Coinbase:    common.HexToAddress("0x7Bd36074b61Cfe75a53e1B9DF7678C96E6463b02"),
+		Coinbase:    common.HexToAddress("0xbaeFe32bc1636a90425AcBCC8cfAD1b0507eCdE1"),
 		BlockNumber: big.NewInt(0),
 		Time:        0,
 		GasLimit:    8000000,
@@ -211,6 +216,69 @@ func (s *Solidity) InitChain(genesisBlock *yu_types.Block) {
 	}
 
 	genesisBlock.StateRoot = yu_common.Hash(genesisStateRoot)
+
+	if s.cfg.GenesisContractCode != "" {
+		initContract(s)
+	}
+}
+
+func initContract(s *Solidity) {
+	createContractInput := s.cfg.GenesisContractCode
+	createContractInputByt, _ := hexutil.Decode(createContractInput)
+	createContractTx := &TxRequest{
+		Origin:   common.HexToAddress(s.cfg.GenesisContractDeployer),
+		Input:    createContractInputByt,
+		GasLimit: 10000000,
+		Value:    big.NewInt(0),
+		GasPrice: big.NewInt(2000000000),
+	}
+	_, _ = initRunTxReq(s, createContractTx)
+}
+
+func initRunTxReq(s *Solidity, txReq *TxRequest) ([]byte, error) {
+	vmenv := newEVM(s.cfg)
+	//s.ethState.setTxContext()
+	vmenv.StateDB = s.ethState.stateDB
+	sender := vm.AccountRef(txReq.Origin)
+	rules := s.cfg.ChainConfig.Rules(vmenv.Context.BlockNumber, vmenv.Context.Random != nil, vmenv.Context.Time)
+
+	cfg := s.cfg
+	if txReq.Address == nil {
+		if cfg.EVMConfig.Tracer != nil && cfg.EVMConfig.Tracer.OnTxStart != nil {
+			cfg.EVMConfig.Tracer.OnTxStart(vmenv.GetVMContext(), types.NewTx(&types.LegacyTx{Data: txReq.Input, Value: txReq.Value, Gas: txReq.GasLimit}), txReq.Origin)
+		}
+
+		s.ethState.Prepare(rules, cfg.Origin, cfg.Coinbase, nil, vm.ActivePrecompiles(rules), nil)
+
+		code, address, leftOverGas, err := vmenv.Create(sender, txReq.Input, txReq.GasLimit, uint256.MustFromBig(txReq.Value))
+		if err != nil {
+			byt, _ := json.Marshal(txReq)
+			logrus.Printf("[Execute Txn] Create contract Failed. err = %v. Request = %v", err, string(byt))
+		}
+
+		logrus.Printf("[Execute Txn] Create contract success. Address = %v, Left Gas = %v", address.Hex(), leftOverGas)
+
+		s.cfg.GenesisContractAddress = address.Hex()
+
+		return code, err
+	} else {
+		if cfg.EVMConfig.Tracer != nil && cfg.EVMConfig.Tracer.OnTxStart != nil {
+			cfg.EVMConfig.Tracer.OnTxStart(vmenv.GetVMContext(), types.NewTx(&types.LegacyTx{To: txReq.Address, Data: txReq.Input, Value: txReq.Value, Gas: txReq.GasLimit}), txReq.Origin)
+		}
+
+		s.ethState.Prepare(rules, cfg.Origin, cfg.Coinbase, txReq.Address, vm.ActivePrecompiles(rules), nil)
+		s.ethState.SetNonce(txReq.Origin, 1)
+
+		code, leftOverGas, err := vmenv.Call(sender, *txReq.Address, txReq.Input, txReq.GasLimit, uint256.MustFromBig(txReq.Value))
+		if err != nil {
+			byt, _ := json.Marshal(txReq)
+			logrus.Printf("[Execute Txn] SendTx Failed. err = %v. Request = %v", err, string(byt))
+		}
+
+		logrus.Printf("[Execute Txn] SendTx success. Hex Code = %v, Left Gas = %v", hex.EncodeToString(code), leftOverGas)
+		return code, err
+	}
+
 }
 
 func NewSolidity(gethConfig *GethConfig) *Solidity {
@@ -303,6 +371,13 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 	sender := vm.AccountRef(txReq.Origin)
 	rules := cfg.ChainConfig.Rules(vmenv.Context.BlockNumber, vmenv.Context.Random != nil, vmenv.Context.Time)
 
+	//Calculate whether the maximum consumption meets the balance
+	err = canTransfer(gasLimit, txReq, gasPrice, s)
+	if err != nil {
+		_ = saveReceipt(ctx, vmenv, txReq, common.Address{}, 0, err)
+		return err
+	}
+
 	if txReq.Address == nil {
 		if cfg.EVMConfig.Tracer != nil && cfg.EVMConfig.Tracer.OnTxStart != nil {
 			cfg.EVMConfig.Tracer.OnTxStart(vmenv.GetVMContext(), types.NewTx(&types.LegacyTx{Data: txReq.Input, Value: txReq.Value, Gas: txReq.GasLimit}), txReq.Origin)
@@ -315,14 +390,21 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 			byt, _ := json.Marshal(txReq)
 			logrus.Printf("[Execute Txn] Create contract Failed. err = %v. Request = %v", err, string(byt))
 			_ = saveReceipt(ctx, vmenv, txReq, address, leftOverGas, err)
+			_ = calculateGasFee(gasLimit, leftOverGas, err, gasPrice, cfg, txReq, s)
 			return err
 		}
 
-		logrus.Printf("[Execute Txn] Create contract success. Address = %v, Left Gas = %v", address.Hex(), leftOverGas)
+		logrus.Printf("[Execute Txn] Create contract. contractAddress = %v, Left Gas = %v", address.Hex(), leftOverGas)
 		err = saveReceipt(ctx, vmenv, txReq, address, leftOverGas, err)
 		if err != nil {
 			return err
 		}
+
+		err = calculateGasFee(gasLimit, leftOverGas, err, gasPrice, cfg, txReq, s)
+		if err != nil {
+			return err
+		}
+
 	} else {
 		if cfg.EVMConfig.Tracer != nil && cfg.EVMConfig.Tracer.OnTxStart != nil {
 			cfg.EVMConfig.Tracer.OnTxStart(vmenv.GetVMContext(), types.NewTx(&types.LegacyTx{To: txReq.Address, Data: txReq.Input, Value: txReq.Value, Gas: txReq.GasLimit}), txReq.Origin)
@@ -339,17 +421,161 @@ func (s *Solidity) ExecuteTxn(ctx *context.WriteContext) error {
 			byt, _ := json.Marshal(txReq)
 			logrus.Printf("[Execute Txn] SendTx Failed. err = %v. Request = %v", err, string(byt))
 			_ = saveReceipt(ctx, vmenv, txReq, common.Address{}, leftOverGas, err)
+			_ = calculateGasFee(gasLimit, leftOverGas, err, gasPrice, cfg, txReq, s)
 			return err
 		}
 
-		logrus.Printf("[Execute Txn] SendTx success. Hex Code = %v, Left Gas = %v", hex.EncodeToString(code), leftOverGas)
+		logrus.Printf("[Execute Txn] SendTx. Hex Code = %v, Left Gas = %v", hex.EncodeToString(code), leftOverGas)
 		err = saveReceipt(ctx, vmenv, txReq, common.Address{}, leftOverGas, err)
 		if err != nil {
 			return err
 		}
+
+		err = calculateGasFee(gasLimit, leftOverGas, err, gasPrice, cfg, txReq, s)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func calculateGasFee(gasLimit uint64, leftOverGas uint64, err error, gasPrice *big.Int, cfg *GethConfig, txReq *TxRequest, s *Solidity) error {
+	gasUsed := gasLimit - leftOverGas
+	usdtPricePerGasUnit, err := GetUSDTPricePerGasUnit()
+	if err != nil {
+		return err
+	}
+	gasfee := new(big.Int).Mul(new(big.Int).SetUint64(gasUsed), gasPrice)
+	gasfeeFloat := new(big.Float).SetInt(gasfee)
+	usdtPricePerGasUnitFloat := new(big.Float).SetInt(usdtPricePerGasUnit)
+	gasFeeFloat := new(big.Float).Quo(gasfeeFloat, usdtPricePerGasUnitFloat)
+	gasFeeFloat = new(big.Float).SetPrec(18).Set(gasFeeFloat)
+
+	logrus.Printf("[Execute Txn] gasfee = %v, gasUsed = %v,gasPrice = %v,usdtPricePerGasUnit = %v", gasFeeFloat, gasUsed, gasPrice, usdtPricePerGasUnit)
+	tenPow18 := new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil)
+	tenPow18Float := new(big.Float).SetInt(tenPow18)
+	gasFeeInWeiFloat := new(big.Float).Mul(gasFeeFloat, tenPow18Float)
+	gasFeeInWei := new(big.Int)
+	gasFeeInWeiFloat.Int(gasFeeInWei)
+
+	transferTx := constructTransferTxInput(cfg, gasLimit, gasPrice, gasFeeInWei, txReq.Origin, cfg.Coinbase)
+	_, err = initRunTxReq(s, transferTx)
+	if err != nil {
+		logrus.Printf("[Execute Txn] Expend gas fail. cfg.Coinbase = %v, gasFeeInWei = %v,gasFeeInWeiFloat = %v", cfg.Coinbase, gasFeeInWei, gasFeeInWeiFloat)
+		return err
+	}
+
+	logrus.Printf("[Execute Txn] Expend gas success. cfg.Coinbase = %v, gasFeeInWei = %v,gasFeeInWeiFloat = %v", cfg.Coinbase, gasFeeInWei, gasFeeInWeiFloat)
+	return nil
+}
+
+func canTransfer(gasLimit uint64, txReq *TxRequest, gasPrice *big.Int, s *Solidity) error {
+	balanceOfSelector := "balanceOf(address)"
+
+	usdtPricePerGasUnit, err := GetUSDTPricePerGasUnit()
+	if err != nil {
+		return err
+	}
+	gasfee := new(big.Int).Mul(new(big.Int).SetUint64(gasLimit), gasPrice)
+	gasfeeFloat := new(big.Float).SetInt(gasfee)
+	usdtPricePerGasUnitFloat := new(big.Float).SetInt(usdtPricePerGasUnit)
+	gasFeeFloat := new(big.Float).Quo(gasfeeFloat, usdtPricePerGasUnitFloat)
+	gasFeeFloat = new(big.Float).SetPrec(18).Set(gasFeeFloat)
+
+	tenPow18 := new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil)
+	tenPow18Float := new(big.Float).SetInt(tenPow18)
+	gasFeeInWeiFloat := new(big.Float).Mul(gasFeeFloat, tenPow18Float)
+	gasFeeInWei := new(big.Int)
+	gasFeeInWeiFloat.Int(gasFeeInWei)
+
+	paddedAddress := padLeft(txReq.Origin.Hex()[2:], 64)
+
+	hash := crypto.Keccak256Hash([]byte(balanceOfSelector))
+	functionSelector := hash.Hex()[0:10]
+
+	balanceOfInput := functionSelector + paddedAddress
+	balanceOfInputByt, _ := hexutil.Decode(balanceOfInput)
+
+	contractAddr := common.HexToAddress(s.cfg.GenesisContractAddress)
+	balanceOfTx := &TxRequest{
+		Origin:   txReq.Origin,
+		Address:  &contractAddr,
+		Value:    big.NewInt(0),
+		Input:    balanceOfInputByt,
+		GasLimit: gasLimit,
+		GasPrice: gasPrice,
+	}
+	code, err := initRunTxReq(s, balanceOfTx)
+	if err != nil {
+		logrus.Printf("[Execute Txn] Get balanceOf fail.")
+	}
+	balanceHex := hex.EncodeToString(code)
+	balance, err := hexStringToBigInt(balanceHex)
+	if err != nil {
+		return fmt.Errorf("[Execute Txn] Failed to convert balance: %v", err)
+	}
+	logrus.Printf("[Execute Txn] Get balance: %v", balance.String())
+
+	if balance.Cmp(gasFeeInWei) < 0 {
+		return fmt.Errorf("[Execute Txn] Insufficient balance: balance = %s, required = %s", balance.String(), gasFeeInWei.String())
 	}
 
 	return nil
+}
+
+func hexStringToBigInt(hexStr string) (*big.Int, error) {
+	decoded, err := hex.DecodeString(hexStr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode hex string: %v", err)
+	}
+
+	result := new(big.Int).SetBytes(decoded)
+	return result, nil
+}
+
+// Function to construct the ERC-20 transfer transaction input data
+func constructTransferTxInput(cfg *GethConfig, gasLimit uint64, gasPrice *big.Int, gasFee *big.Int, originAddress common.Address, recipientAddress common.Address) *TxRequest {
+	// 1. Define the function signature for ERC-20 `transfer` function
+	functionSignature := "transfer(address,uint256)"
+
+	// 2. Calculate the Keccak-256 hash and get the first 4 bytes (function selector)
+	hash := crypto.Keccak256Hash([]byte(functionSignature))
+	functionSelector := hash.Hex()[0:10]
+
+	// 3. Define the recipient address
+	recipient := recipientAddress.Hex()[2:]
+
+	// 4. Define the amount to transfer (in Wei)
+	amount := new(big.Int)
+	amount.SetString(ConvertBigIntToUint256(gasFee).String(), 10)
+
+	// 5. Encode the recipient and amount
+	recipientPadded := padLeft(recipient, 64)
+	amountPadded := padLeft(amount.Text(16), 64)
+
+	// 6. Construct the transfer input data
+	// 5. Construct the transfer input data
+	transferTxInput := functionSelector + recipientPadded + amountPadded
+
+	fmt.Println("Transfer Input Data:", transferTxInput)
+
+	contractAddr := common.HexToAddress(cfg.GenesisContractAddress)
+	transferTxInputByt, _ := hexutil.Decode(transferTxInput)
+	transferTx := &TxRequest{
+		Origin:   originAddress,
+		Address:  &contractAddr,
+		Value:    big.NewInt(0),
+		Input:    transferTxInputByt,
+		GasLimit: gasLimit,
+		GasPrice: gasPrice,
+	}
+
+	return transferTx
+}
+
+// Helper function to pad strings with leading zeros
+func padLeft(str string, length int) string {
+	return fmt.Sprintf("%0*s", length, str)
 }
 
 func saveReceipt(ctx *context.WriteContext, vmEvm *vm.EVM, txReq *TxRequest, contractAddr common.Address, leftOverGas uint64, err error) error {

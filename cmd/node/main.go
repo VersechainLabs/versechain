@@ -2,7 +2,7 @@ package main
 
 import (
 	"flag"
-	"github.com/yu-org/yu/apps/poa"
+	"github.com/yu-org/nine-tripods/consensus/poa"
 	yuconfig "github.com/yu-org/yu/config"
 	"github.com/yu-org/yu/core/startup"
 	"itachi/cairo/config"

@@ -17,12 +17,14 @@ import (
 
 func testErc20DeployAndUse() {
 	_, contractAddr := createContract()
-
+	//contractAddr := common.HexToAddress("0x310b8685e3e69cb05b251a12f5ffab23001cda42")
 	mintErc20(contractAddr)
-	sendEvent(contractAddr)
-	sendEmptyEvent(contractAddr)
+	//sendEvent(contractAddr)
+	//sendEmptyEvent(contractAddr)
 
 	//testReadCache(contractAddr)
+
+	readBalance(contractAddr)
 
 }
 func testReadCache(contractAddr common.Address) {
@@ -128,6 +130,28 @@ func mintErc20(contractAddr common.Address) {
 
 	log.Printf("Mint Log Receipt: %v", ToJsonString(receipt))
 	log.Printf("Mint Log: %v. Is nil = %v", receipt.Logs, receipt.Logs == nil)
+}
+
+func readBalance(contractAddr common.Address) {
+	funcName := "Read Balance"
+	log.Println("================================")
+	log.Println(funcName)
+	log.Println("================================")
+	abi, _ := abigen.TestErc20MetaData.GetAbi()
+	data, _ := abi.Pack("balanceOf", testWalletAddr)
+
+	arg := ethereum.CallMsg{
+		To:   &contractAddr,
+		Data: data,
+	}
+	result, err := client.CallContract(context.Background(), arg, nil)
+	outputs, err := abi.Unpack("balanceOf", result)
+	if err != nil {
+		log.Fatalf("Failed to unpack contract output: %v", err)
+	}
+
+	counter := outputs[0].(*big.Int)
+	log.Printf("%v Counter value: %s", funcName, counter.String())
 }
 
 func sendEvent(contractAddr common.Address) {

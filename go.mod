@@ -14,10 +14,12 @@ require (
 	github.com/holiman/uint256 v1.2.4
 	github.com/jinzhu/copier v0.3.5
 	github.com/rs/cors v1.10.1
-	github.com/sirupsen/logrus v1.9.0
+	github.com/sirupsen/logrus v1.9.3
 	github.com/sourcegraph/conc v0.2.0
+	github.com/status-im/keycard-go v0.2.0
 	github.com/stretchr/testify v1.9.0
-	github.com/yu-org/yu v0.0.0-20240812080857-f6a58509685f
+	github.com/yu-org/nine-tripods/consensus/poa v0.0.0-20240826034215-726d50779160
+	github.com/yu-org/yu v1.0.2
 )
 
 require (
@@ -200,7 +202,6 @@ require (
 	github.com/sourcegraph/sourcegraph/lib v0.0.0-20221216004406-749998a2ac74 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
-	github.com/status-im/keycard-go v0.2.0 // indirect
 	github.com/supranational/blst v0.3.11 // indirect
 	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7 // indirect
 	github.com/tendermint/tendermint v0.34.24 // indirect
@@ -212,6 +213,7 @@ require (
 	github.com/ugorji/go/codec v1.2.11 // indirect
 	github.com/whyrusleeping/go-keyspace v0.0.0-20160322163242-5b898ac5add1 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
+	github.com/yu-org/nine-tripods/MEVless v0.0.0-20240825134510-d0295b046278 // indirect
 	go.etcd.io/bbolt v1.3.6 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.opentelemetry.io/otel v1.16.0 // indirect

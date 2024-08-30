@@ -15,7 +15,7 @@ import (
 	"github.com/NethermindEth/juno/rpc"
 	starkrpc "github.com/NethermindEth/starknet.go/rpc"
 	"github.com/stretchr/testify/assert"
-	"github.com/yu-org/yu/apps/poa"
+	"github.com/yu-org/nine-tripods/consensus/poa"
 	"github.com/yu-org/yu/common"
 	"github.com/yu-org/yu/core/kernel"
 	"github.com/yu-org/yu/core/startup"
