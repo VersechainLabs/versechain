@@ -17,7 +17,6 @@ import (
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/hashdb"
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
-	"github.com/holiman/uint256"
 	"github.com/sirupsen/logrus"
 	"itachi/evm/config"
 	"path/filepath"
@@ -205,13 +204,4 @@ func (s *EthState) GetNonce(addr common.Address) uint64 {
 	s.stateDB.StopPrefetcher()
 	uint64 := s.stateDB.GetNonce(addr)
 	return uint64
-}
-
-func (s *EthState) Transfer(sender common.Address, recipient common.Address, amount *uint256.Int) {
-	s.stateDB.SubBalance(sender, amount, tracing.BalanceChangeTransfer)
-	s.stateDB.AddBalance(recipient, amount, tracing.BalanceChangeTransfer)
-}
-
-func (s *EthState) CanTransfer(addr common.Address, amount *uint256.Int) bool {
-	return s.stateDB.GetBalance(addr).Cmp(amount) >= 0
 }
