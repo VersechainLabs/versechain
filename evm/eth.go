@@ -267,7 +267,6 @@ func initRunTxReq(s *Solidity, txReq *TxRequest) ([]byte, error) {
 		}
 
 		s.ethState.Prepare(rules, cfg.Origin, cfg.Coinbase, txReq.Address, vm.ActivePrecompiles(rules), nil)
-		s.ethState.SetNonce(txReq.Origin, 1)
 
 		code, leftOverGas, err := vmenv.Call(sender, *txReq.Address, txReq.Input, txReq.GasLimit, uint256.MustFromBig(txReq.Value))
 		if err != nil {
