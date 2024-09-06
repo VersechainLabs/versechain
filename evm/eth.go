@@ -220,6 +220,10 @@ func (s *Solidity) InitChain(genesisBlock *yu_types.Block) {
 	if s.cfg.GenesisContractCode != "" {
 		initContract(s)
 	}
+
+	// Deploy Random Contact
+	// TODO: load contract code from config
+	initRandomContract(s)
 }
 
 func initContract(s *Solidity) {
@@ -232,10 +236,27 @@ func initContract(s *Solidity) {
 		Value:    big.NewInt(0),
 		GasPrice: big.NewInt(2000000000),
 	}
-	_, _ = initRunTxReq(s, createContractTx)
+	_, contractAddr, _ := initRunTxReq(s, createContractTx)
+	s.cfg.GenesisContractAddress = contractAddr.Hex()
 }
 
-func initRunTxReq(s *Solidity, txReq *TxRequest) ([]byte, error) {
+func initRandomContract(s *Solidity) {
+	createContractInput := "0x608060405234801561001057600080fd5b5060b28061001f6000396000f3fe6080604052348015600f57600080fd5b506004361060285760003560e01c8063aacc5a1714602d575b600080fd5b60336047565b604051603e91906063565b60405180910390f35b600090565b6000819050919050565b605d81604c565b82525050565b6000602082019050607660008301846056565b9291505056fea26469706673582212203e9972e2f120f68458fbfe81c2f6cd126ae8991b3c663c231980aef4a150bcf064736f6c63430008140033"
+	createContractInputByt, _ := hexutil.Decode(createContractInput)
+	createContractTx := &TxRequest{
+		Origin:   common.HexToAddress(s.cfg.GenesisContractDeployer),
+		Input:    createContractInputByt,
+		GasLimit: 10000000,
+		Value:    big.NewInt(0),
+		GasPrice: big.NewInt(2000000000),
+	}
+	_, randomContractAddr, _ := initRunTxReq(s, createContractTx)
+
+	logrus.Printf("[initRandomContract] Random Contract Addr = %v", randomContractAddr.Hex())
+	s.cfg.ChainConfig.RandomContractAddr = *randomContractAddr
+}
+
+func initRunTxReq(s *Solidity, txReq *TxRequest) ([]byte, *common.Address, error) {
 	vmenv := newEVM(s.cfg)
 	//s.ethState.setTxContext()
 	vmenv.StateDB = s.ethState.stateDB
@@ -258,9 +279,7 @@ func initRunTxReq(s *Solidity, txReq *TxRequest) ([]byte, error) {
 
 		logrus.Printf("[Execute Txn] Create contract success. Address = %v, Left Gas = %v", address.Hex(), leftOverGas)
 
-		s.cfg.GenesisContractAddress = address.Hex()
-
-		return code, err
+		return code, &address, err
 	} else {
 		if cfg.EVMConfig.Tracer != nil && cfg.EVMConfig.Tracer.OnTxStart != nil {
 			cfg.EVMConfig.Tracer.OnTxStart(vmenv.GetVMContext(), types.NewTx(&types.LegacyTx{To: txReq.Address, Data: txReq.Input, Value: txReq.Value, Gas: txReq.GasLimit}), txReq.Origin)
@@ -275,9 +294,8 @@ func initRunTxReq(s *Solidity, txReq *TxRequest) ([]byte, error) {
 		}
 
 		logrus.Printf("[Execute Txn] SendTx success. Hex Code = %v, Left Gas = %v", hex.EncodeToString(code), leftOverGas)
-		return code, err
+		return code, nil, err
 	}
-
 }
 
 func NewSolidity(gethConfig *GethConfig) *Solidity {
@@ -458,7 +476,7 @@ func calculateGasFee(gasLimit uint64, leftOverGas uint64, err error, gasPrice *b
 	gasFeeInWeiFloat.Int(gasFeeInWei)
 
 	transferTx := constructTransferTxInput(cfg, gasLimit, gasPrice, gasFeeInWei, txReq.Origin, cfg.Coinbase)
-	_, err = initRunTxReq(s, transferTx)
+	_, _, err = initRunTxReq(s, transferTx)
 	if err != nil {
 		logrus.Printf("[Execute Txn] Expend gas fail. cfg.Coinbase = %v, gasFeeInWei = %v,gasFeeInWeiFloat = %v", cfg.Coinbase, gasFeeInWei, gasFeeInWeiFloat)
 		return err
@@ -504,7 +522,7 @@ func canTransfer(gasLimit uint64, txReq *TxRequest, gasPrice *big.Int, s *Solidi
 		GasLimit: gasLimit,
 		GasPrice: gasPrice,
 	}
-	code, err := initRunTxReq(s, balanceOfTx)
+	code, _, err := initRunTxReq(s, balanceOfTx)
 	if err != nil {
 		logrus.Printf("[Execute Txn] Get balanceOf fail.")
 	}

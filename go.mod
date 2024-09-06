@@ -4,6 +4,8 @@ go 1.21.4
 
 replace github.com/NethermindEth/juno => ./juno
 
+replace github.com/ethereum/go-ethereum => github.com/wliu6v/go-ethereum v0.0.0-20240905022647-049573902c3d
+
 require (
 	github.com/BurntSushi/toml v1.2.1
 	github.com/NethermindEth/juno v0.8.1-0.20231228072404-6222563f6218
