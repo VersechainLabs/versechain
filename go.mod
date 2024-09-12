@@ -4,7 +4,8 @@ go 1.21.4
 
 replace github.com/NethermindEth/juno => ./juno
 
-replace github.com/ethereum/go-ethereum => github.com/VersechainLabs/go-ethereum v0.0.0-20240905022647-049573902c3d
+replace github.com/ethereum/go-ethereum => github.com/VersechainLabs/go-ethereum v0.0.0-20240912085458-d50bad487604
+//replace github.com/ethereum/go-ethereum => ../../go/src/go-ethereum
 
 require (
 	github.com/BurntSushi/toml v1.2.1
@@ -213,6 +214,7 @@ require (
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/tyler-smith/go-bip39 v1.1.0 // indirect
 	github.com/ugorji/go/codec v1.2.11 // indirect
+	github.com/vechain/go-ecvrf v0.0.0-20220525125849-96fa0442e765 // indirect
 	github.com/whyrusleeping/go-keyspace v0.0.0-20160322163242-5b898ac5add1 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	github.com/yu-org/nine-tripods/MEVless v0.0.0-20240825134510-d0295b046278 // indirect
