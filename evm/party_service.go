@@ -1,9 +1,12 @@
 package evm
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/sirupsen/logrus"
+	"io"
 	"math/big"
 	"net/http"
 	"sync"
@@ -32,14 +35,21 @@ func GetUSDTPricePerGasUnit() (*big.Int, error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
 
+	resp.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 	var result map[string]map[string]float64
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		logrus.Errorf("[USDT] failed parse usdt price. err: %v. response:%v", err, string(bodyBytes))
 		return nil, err
 	}
 
 	priceInETH, ok := result["tether"]["eth"]
 	if !ok {
+		logrus.Errorf("[USDT] failed parse usdt price. err: %v. response:%v", err, string(bodyBytes))
 		return nil, errors.New("could not retrieve price from API response")
 	}
 
