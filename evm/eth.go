@@ -102,6 +102,10 @@ type GethConfig struct {
 	GenesisContractCode     string `toml:"genesis_contract_code"`
 	GenesisContractDeployer string `toml:"genesis_contract_deployer"`
 	GenesisContractAddress  string
+
+	RandomContractCode    string `toml:"random_contract_code"`
+	VrfSkHex              string `toml:"vrf_sk_hex"`
+	RandomContractAddress string
 }
 
 // sets defaults on the config
@@ -222,8 +226,9 @@ func (s *Solidity) InitChain(genesisBlock *yu_types.Block) {
 	}
 
 	// Deploy Random Contact
-	// TODO: load contract code from config
-	initRandomContract(s)
+	if s.cfg.RandomContractCode != "" {
+		initRandomContract(s)
+	}
 }
 
 func initContract(s *Solidity) {
@@ -241,7 +246,7 @@ func initContract(s *Solidity) {
 }
 
 func initRandomContract(s *Solidity) {
-	createContractInput := "0x608060405234801561001057600080fd5b506101a4806100206000396000f3fe608060405234801561001057600080fd5b50600436106100365760003560e01c806380d121ce1461003b578063aacc5a171461006c575b600080fd5b610055600480360381019061005091906100db565b61008a565b60405161006392919061012a565b60405180910390f35b61007461009b565b6040516100819190610153565b60405180910390f35b600080600080915091509250929050565b600090565b600080fd5b6000819050919050565b6100b8816100a5565b81146100c357600080fd5b50565b6000813590506100d5816100af565b92915050565b600080604083850312156100f2576100f16100a0565b5b6000610100858286016100c6565b9250506020610111858286016100c6565b9150509250929050565b610124816100a5565b82525050565b600060408201905061013f600083018561011b565b61014c602083018461011b565b9392505050565b6000602082019050610168600083018461011b565b9291505056fea2646970667358221220754af6da24e7947b34be4fc230d5852134e750f4ec300db075f28b9b01cc675164736f6c63430008140033"
+	createContractInput := s.cfg.RandomContractCode
 	createContractInputByt, _ := hexutil.Decode(createContractInput)
 	createContractTx := &TxRequest{
 		Origin:   common.HexToAddress(s.cfg.GenesisContractDeployer),
@@ -254,7 +259,8 @@ func initRandomContract(s *Solidity) {
 
 	logrus.Printf("[initRandomContract] Random Contract Addr = %v", randomContractAddr.Hex())
 	s.cfg.ChainConfig.RandomContractAddr = *randomContractAddr
-	s.cfg.ChainConfig.VrfSkHex = "43498df2a4b6b497051a3e373472fdeea217c74430ddaa0e459f6a72c0df886a"
+	s.cfg.RandomContractAddress = randomContractAddr.Hex()
+	s.cfg.ChainConfig.VrfSkHex = s.cfg.VrfSkHex
 }
 
 func initRunTxReq(s *Solidity, txReq *TxRequest) ([]byte, *common.Address, error) {
