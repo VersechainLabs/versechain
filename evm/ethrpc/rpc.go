@@ -3,18 +3,19 @@ package ethrpc
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
+	"io"
+	"net"
+	"net/http"
+	"time"
+
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/rs/cors"
 	"github.com/sirupsen/logrus"
 	"github.com/sourcegraph/conc"
 	"github.com/yu-org/yu/core/kernel"
-	"io"
-	"itachi/evm"
-	"net"
-	"net/http"
-	"time"
+
+	"github.com/reddio-com/reddio/evm"
 )
 
 const SolidityTripod = "solidity"
@@ -106,12 +107,8 @@ func logRequestResponse(next http.Handler) http.Handler {
 
 		rec := &responseRecorder{ResponseWriter: w, body: &bytes.Buffer{}}
 		next.ServeHTTP(rec, r)
-
-		parsedRequest := make(map[string]interface{})
-		_ = json.Unmarshal(bodyBytes, &parsedRequest)
-		method := parsedRequest["method"]
-		logrus.Infof("[API] [%v] Request:  %s", method, string(bodyBytes))
-		logrus.Infof("[API] [%v] Response: %s", method, rec.body.String())
+		logrus.Debugf("[API] Request:  %s", string(bodyBytes))
+		logrus.Debugf("[API] Response: %s", rec.body.String())
 	})
 }
 
